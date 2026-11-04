@@ -1,6 +1,6 @@
 import { getAdminComplaintsPage } from '@/services/complaints.server'
 import { getSessionTokens } from '@/lib/auth/session'
-import { parseComplaint, type RawComplaint } from '@/types/admin'
+import { parseComplaint } from '@/types/admin'
 import { COMPLAINT_REASONS } from '@/lib/validation/complaint'
 import { formatDate } from '@/lib/utils/format'
 import { Pagination } from '@/components/ui/pagination'

@@ -11,8 +11,6 @@ import { Hangout, HangoutStatus } from './entities/hangout.entity';
 import { HangoutParticipant } from './entities/hangout-participant.entity';
 import { VenuesService } from '../venues/venues.service';
 import { CacheService } from '../../common/services/cache.service';
-import { PermissionsService } from '../rbac/permissions.service';
-import { Venue } from '../venues/entities/venue.entity';
 
 describe('HangoutsService', () => {
   let service: HangoutsService;
@@ -205,7 +203,7 @@ describe('HangoutsService.listPublic — кеш-хіт сторінок', () => 
   let hangouts: any;
   let cache: any;
   let venues: any;
-  let perms: any;
+
   let events: any;
 
   beforeEach(async () => {
@@ -217,7 +215,6 @@ describe('HangoutsService.listPublic — кеш-хіт сторінок', () => 
     };
     cache = { get: jest.fn(), set: jest.fn() };
     venues = { findOne: jest.fn(), createQueryBuilder: jest.fn() };
-    perms = {};
     events = { emit: jest.fn() };
     const module = await Test.createTestingModule({
       providers: [

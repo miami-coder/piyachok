@@ -129,7 +129,9 @@ export class ReviewsService {
       highest: { column: 'rating', dir: 'DESC' },
       lowest: { column: 'rating', dir: 'ASC' },
     };
-    const order = orderMap[sort];
+    // sort приходить із query-рядка без рантайм-валідації: невідоме значення
+    // або порожній рядок не мають ключа в orderMap — падаємо в дефолт.
+    const order = orderMap[sort] ?? orderMap['newest'];
     const [data, total] = await this.reviews
       .createQueryBuilder('r')
       .leftJoinAndSelect('r.user', 'u')

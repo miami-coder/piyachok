@@ -15,7 +15,6 @@ export const revalidate = 0
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const GRANULARITIES: Granularity[] = ['day', 'week', 'month']
-const LIMIT = 20
 
 // react-hooks/purity: дефолтний період рахуємо поза рендером (як у
 // account/venues/[id]/page.tsx)

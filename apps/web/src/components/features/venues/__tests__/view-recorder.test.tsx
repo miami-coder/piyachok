@@ -13,7 +13,7 @@ describe('ViewRecorder', () => {
     // (адаптація: типізуємо параметри мока, інакше TS лає порожній tuple mock.calls[0];
     // параметри потрібні лише для типізації викликів — значення читаємо з mock.calls)
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
       new Response(JSON.stringify({ data: { recorded: true } }), {
         status: 201, headers: { 'content-type': 'application/json' },
       }))

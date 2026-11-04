@@ -186,7 +186,6 @@ describe('AdminUsersService', () => {
   describe('softDelete', () => {
     it('soft-deletes, sets cached deleted-flag, audits', async () => {
       users.findOne.mockResolvedValue({ id: 'u1', deletedAt: null });
-      const cache = { set: jest.fn() };
       // підмінити кеш-сервіс — інстанс створено в beforeEach; зручніше: тестуємо через audit + save
       const res = await service.softDelete('admin', 'u1');
       expect(res.data).toEqual({ id: 'u1' });

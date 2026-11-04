@@ -1,6 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { NotFoundException } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { VenueView } from './entities/venue-view.entity';
 import { Venue } from '../venues/entities/venue.entity';

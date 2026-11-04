@@ -313,13 +313,9 @@ describe('VenuesService', () => {
       (c: unknown[]) => c[0] as string,
     );
     // Для КОЖНОГО запитаного коду свій EXISTS-підзапит (AND), а не один IN (OR)
-    for (const code of ['wifi', 'parking']) {
-      expect(
-        sqls.some(
-          (s: string) => s.includes('EXISTS') && s.includes('f2.code = :'),
-        ),
-      ).toBe(true);
-    }
+    expect(
+      sqls.some((s: string) => s.includes('EXISTS') && s.includes('f2.code = :')),
+    ).toBe(true);
     const andParams = mockQb.andWhere.mock.calls
       .flat()
       .filter((x: unknown) => typeof x === 'object' && x !== null) as Record<
@@ -633,7 +629,6 @@ describe('VenuesService.search — кеш-хіт повторної сторін
   let venues: any;
   let cache: any;
   let perms: any;
-  let cacheSvc: any;
   let events: any;
   let storage: any;
   let audit: any;

@@ -23,7 +23,6 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
-import { DataSource } from 'typeorm';
 import bcrypt from 'bcryptjs';
 import defaultDataSource from '../config/data-source';
 import { User } from '../modules/users/entities/user.entity';

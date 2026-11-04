@@ -1,8 +1,6 @@
 import {
   ArgumentsHost,
   BadRequestException,
-  HttpException,
-  HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
 import { AllExceptionsFilter } from './all-exceptions.filter';

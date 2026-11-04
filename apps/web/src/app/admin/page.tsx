@@ -1,12 +1,6 @@
 import { getAdminOverview } from '@/services/admin.server'
 import { getSessionTokens } from '@/lib/auth/session'
 
-interface RawOverview {
-  totalViews: number
-  totalEvents: number
-  eventsByType: { eventType: string; count: number }[]
-}
-
 // Плитка-лічильник: число font-display бурштинове + faint-підпис, без кліку
 function Tile({ label, value }: { label: string; value: string | number }) {
   return (

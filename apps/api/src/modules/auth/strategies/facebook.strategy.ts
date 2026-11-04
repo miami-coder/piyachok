@@ -29,8 +29,8 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
   }
 
   async validate(
-    accessToken: string,
-    refreshToken: string,
+    _accessToken: string,
+    _refreshToken: string,
     profile: Profile,
     // Типізований done (замість any-підпису у VerifyFunction пасажпорта):
     // стратегія повертає підзапис { id, email } або помилку.

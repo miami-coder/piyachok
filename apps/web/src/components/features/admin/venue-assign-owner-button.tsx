@@ -7,7 +7,7 @@ import { assignVenueOwner } from '@/services/venues'
 import { getAdminUserOptions } from '@/services/users'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { parseAdminUser, type AdminUser, type RawAdminUser } from '@/types/admin'
+import { parseAdminUser, type AdminUser } from '@/types/admin'
 
 // Призначення власника закладу: модалка з вибором користувача, POST
 // assign-owner { userId } → toast + refresh + закриття.

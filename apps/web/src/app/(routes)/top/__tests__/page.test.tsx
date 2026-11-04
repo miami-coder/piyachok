@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 
 // Острови каталогу в цих місцях не потрібні — тестуємо тільки /top

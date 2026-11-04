@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getAdminUsersPage } from '@/services/users.server'
 import { getSessionTokens } from '@/lib/auth/session'
-import { parseAdminUser, type RawAdminUser } from '@/types/admin'
+import { parseAdminUser } from '@/types/admin'
 import { formatDate } from '@/lib/utils/format'
 import { Pagination } from '@/components/ui/pagination'
 import { RoleBadge } from '@/components/features/admin/role-badge'

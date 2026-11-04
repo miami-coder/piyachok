@@ -6,7 +6,7 @@ import { getMeSession } from '@/services/auth.server'
 import { getSessionTokens } from '@/lib/auth/session'
 import { HANGOUT_GENDERS, HANGOUT_PAYERS } from '@/lib/validation/hangout'
 import { formatMoney } from '@/lib/utils/format'
-import { parseHangout, HANGOUT_STATUS_LABELS, type RawHangout, type Hangout, type HangoutGender, type HangoutPayer } from '@/types/hangout'
+import { parseHangout, HANGOUT_STATUS_LABELS, type Hangout, type HangoutGender, type HangoutPayer } from '@/types/hangout'
 
 const ROLES = ['created', 'joined', 'all'] as const
 

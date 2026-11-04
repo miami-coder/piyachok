@@ -3,7 +3,7 @@ import {
   ApiBearerAuth,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
-  ApiOkResponse,
+
   ApiOperation,
   ApiQuery,
   ApiTags,

@@ -7,7 +7,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { useToast } from '@/components/ui/toast'
 import { getMyMessages, markMessageRead } from '@/services/messages'
 import { ApiError } from '@/lib/api/parse'
 import { MESSAGE_KIND_LABELS, parseMessage, type Message } from '@/types/message'

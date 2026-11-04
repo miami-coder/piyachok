@@ -13,7 +13,6 @@
 // ВАЖЛИВО: це сід для локального середовища — на проді (Vercel/Neon)
 // він не запускається сервером, супер-адміна там створено керовано.
 
-import { DataSource } from 'typeorm';
 import bcrypt from 'bcryptjs';
 import defaultDataSource from '../config/data-source';
 import { User } from '../modules/users/entities/user.entity';

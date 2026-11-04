@@ -19,7 +19,6 @@ import { getFavoriteIds, getVenueDetail } from '@/services/venues.server'
 import { getVenueNews } from '@/services/news.server'
 import { findMyReviewForVenue } from '@/services/reviews.server'
 import { formatMoney } from '@/lib/utils/format'
-import type { Venue } from '@/types/venue'
 import { parseNews, type News } from '@/types/news'
 
 interface Props {

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { MyReviewItem } from '@/components/features/account/my-review-item'
 import { getMyReviews } from '@/services/reviews.server'
 import { getSessionTokens } from '@/lib/auth/session'
-import { parseReview, type RawReview } from '@/types/review'
+import { parseReview } from '@/types/review'
 
 export default async function MyReviewsPage() {
   const tokens = await getSessionTokens()

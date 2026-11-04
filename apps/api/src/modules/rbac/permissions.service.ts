@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserRole } from './entities/user-role.entity';
@@ -6,7 +6,6 @@ import { CacheService } from '../../common/services/cache.service';
 
 @Injectable()
 export class PermissionsService {
-  private readonly logger = new Logger(PermissionsService.name);
   private readonly TTL = 300;
 
   constructor(

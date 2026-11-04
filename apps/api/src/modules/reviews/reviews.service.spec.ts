@@ -128,7 +128,7 @@ describe('ReviewsService', () => {
       text: '...',
     });
     perms.hasPermission.mockResolvedValueOnce(true);
-    const r = await service.update('admin', 'r1', { text: 'X' });
+    await service.update('admin', 'r1', { text: 'X' });
     expect(events.emit).toHaveBeenCalledWith(
       'review.updated',
       expect.anything(),
@@ -204,6 +204,39 @@ describe('ReviewsService — санітизація авторів відгук�
       ],
     }).compile();
     service = module.get(ReviewsService);
+  });
+
+  it('listForVenue з невідомим або порожнім sort падає в newest, а не кидає помилку', async () => {
+    const makeQb = () => {
+      const addOrderBy = jest.fn().mockReturnThis();
+      return {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy,
+        skip: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getManyAndCount: jest
+          .fn()
+          .mockResolvedValue([[{ id: 'r1', user: {} }], 1]),
+        lastAddOrderBy: addOrderBy,
+      };
+    };
+    const qbBogus = makeQb();
+    const qbEmpty = makeQb();
+    reviews.createQueryBuilder
+      .mockReturnValueOnce(qbBogus)
+      .mockReturnValueOnce(qbEmpty);
+    await service.listForVenue('v1', 1, 20, 'bogus' as never);
+    expect(qbBogus.lastAddOrderBy).toHaveBeenCalledWith(
+      'r.createdAt',
+      'DESC',
+    );
+    await service.listForVenue('v1', 1, 20, '' as never);
+    expect(qbEmpty.lastAddOrderBy).toHaveBeenCalledWith(
+      'r.createdAt',
+      'DESC',
+    );
   });
 
   it('listForVenue віддає автора без email/passwordHash/emailVerified/deletedAt', async () => {

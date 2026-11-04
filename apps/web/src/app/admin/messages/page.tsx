@@ -1,6 +1,6 @@
 import { getAdminFeedback } from '@/services/messages.server'
 import { getSessionTokens } from '@/lib/auth/session'
-import { parseMessage, type RawMessage } from '@/types/message'
+import { parseMessage } from '@/types/message'
 import { formatDate } from '@/lib/utils/format'
 import { Pagination } from '@/components/ui/pagination'
 import { AdminFeedbackReply } from '@/components/features/admin/admin-feedback-reply'

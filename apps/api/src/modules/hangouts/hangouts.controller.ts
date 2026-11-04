@@ -206,7 +206,7 @@ export class HangoutsController {
   })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiNotFoundResponse({ description: 'Зустріч не знайдено' })
-  get(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
+  get(@Param('id', ParseUuidPipe) id: string) {
     return this.hangouts.getOne(id).then((data) => ({ data }));
   }
 

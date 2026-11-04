@@ -1,7 +1,7 @@
 // Головна сторінка — каталог закладів із пошуком, фільтрами, сортуванням і пагінацією
 
 import { getVenuesCatalog } from '@/services/venues.server'
-import { parseVenue, type RawVenue } from '@/types/venue'
+import { parseVenue } from '@/types/venue'
 import { parseCatalogQuery, catalogHref, toSearch, type CatalogQuery } from '@/lib/venues/query'
 import { VenueCard } from '@/components/features/venues/venue-card'
 import { VenueFilters } from '@/components/features/venues/venue-filters'

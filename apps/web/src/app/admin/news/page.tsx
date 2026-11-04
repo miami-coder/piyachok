@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getAdminNewsPage } from '@/services/news.server'
 import { getSessionTokens } from '@/lib/auth/session'
-import { parseNews, NEWS_STATUS_LABELS, type RawNews, type NewsStatus } from '@/types/news'
+import { parseNews, NEWS_STATUS_LABELS, type NewsStatus } from '@/types/news'
 import { NEWS_CATEGORIES } from '@/lib/validation/news'
 import { formatDate } from '@/lib/utils/format'
 import { Pagination } from '@/components/ui/pagination'

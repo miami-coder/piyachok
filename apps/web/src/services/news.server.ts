@@ -27,7 +27,7 @@ export function getVenueNews(venueId: string, tokens: SessionTokens | null) {
 }
 
 /** Список новин для адмінки (опційний фільтр статусу, пагінація). */
-export function getAdminNewsPage(page: number, limit: number, status: string | undefined, tokens: SessionTokens | null) {
+export function getAdminNewsPage(page: number, _limit: number, status: string | undefined, tokens: SessionTokens | null) {
   const statusQuery = status ? `&status=${status}` : ''
   return serverFetchList<RawNews>(`/admin/news?page=${page}${statusQuery}`, { tokens, revalidate: 0 })
 }

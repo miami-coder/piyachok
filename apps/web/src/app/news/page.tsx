@@ -6,7 +6,7 @@ import { Pagination } from '@/components/ui/pagination'
 import { NewsListItem } from '@/components/features/news/news-list-item'
 import { getNewsPage } from '@/services/news.server'
 import { NEWS_CATEGORIES } from '@/lib/validation/news'
-import { parseNews, type RawNews } from '@/types/news'
+import { parseNews } from '@/types/news'
 
 const LIMIT = 12
 

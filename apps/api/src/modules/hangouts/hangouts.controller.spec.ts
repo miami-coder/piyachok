@@ -70,7 +70,7 @@ describe('HangoutsController', () => {
 
   it('get delegates to getOne (без гейту участі) and wraps in data', async () => {
     hangouts.getOne.mockResolvedValue({ id: 'h1' });
-    const res = await controller.get({ sub: 'u1' } as any, 'h1');
+    const res = await controller.get('h1');
     expect(hangouts.getOne).toHaveBeenCalledWith('h1');
     expect(res.data.id).toBe('h1');
   });

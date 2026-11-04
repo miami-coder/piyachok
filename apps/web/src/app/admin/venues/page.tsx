@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getAdminVenuesPage } from '@/services/venues.server'
 import { getSessionTokens } from '@/lib/auth/session'
-import { parseVenue, VENUE_STATUS_LABELS, type Venue, type RawVenue } from '@/types/venue'
+import { parseVenue, VENUE_STATUS_LABELS, type Venue } from '@/types/venue'
 import { formatDate } from '@/lib/utils/format'
 import { Badge } from '@/components/ui/badge'
 import { Pagination } from '@/components/ui/pagination'

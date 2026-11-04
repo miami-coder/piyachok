@@ -14,13 +14,13 @@ describe('Venues E2E', () => {
     app = result.app;
     ds = result.module.get(DataSource);
 
-    const owner = await createTestUser(ds, {
+    await createTestUser(ds, {
       email: 'owner@x.com',
       password: 'Password1',
       firstname: 'О',
       lastname: 'В',
     });
-    const admin = await createTestUser(ds, {
+    await createTestUser(ds, {
       email: 'admin@x.com',
       password: 'Password1',
       firstname: 'A',
@@ -93,7 +93,7 @@ describe('Venues E2E', () => {
   });
 
   it('non-owner non-admin cannot update venue', async () => {
-    const stranger = await createTestUser(ds, {
+    await createTestUser(ds, {
       email: 'stranger@x.com',
       password: 'Password1',
       firstname: 'S',

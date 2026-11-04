@@ -5,7 +5,7 @@ import { HangoutJoinButton } from '@/components/features/hangouts/hangout-join-b
 import { Pagination } from '@/components/ui/pagination'
 import { getHangouts, getMyHangoutIds } from '@/services/hangouts.server'
 import { getSessionTokens } from '@/lib/auth/session'
-import { parseHangout, HANGOUT_STATUS_LABELS, type HangoutStatus, type RawHangout } from '@/types/hangout'
+import { parseHangout, HANGOUT_STATUS_LABELS, type HangoutStatus } from '@/types/hangout'
 import { formatMoney } from '@/lib/utils/format'
 // Лейбл payer — та сама константа, що й у формі створення/кабінеті (єдине джерело копірайту)
 import { HANGOUT_PAYERS } from '@/lib/validation/hangout'
