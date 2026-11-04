@@ -36,11 +36,10 @@ export class ReviewsService {
     private readonly events: EventEmitter2,
   ) {}
 
-  async create(
-    userId: string,
-    venueId: string,
-    dto: CreateReviewDto,
-  ): Promise<Review> {
+  /** Перевірка, що відгук на заклад взагалі можна створити:
+   *  заклад існує, схвалений, не власний, дубліката немає.
+   *  Викликається до будь-яких побічних ефектів (збереження файла). */
+  async assertCanCreate(userId: string, venueId: string): Promise<void> {
     const venue = await this.venues.findOne({ where: { id: venueId } });
     if (!venue) throw new NotFoundException('Заклад не знайдено');
     if (venue.status !== VenueStatus.Approved)
@@ -54,6 +53,14 @@ export class ReviewsService {
     const existing = await this.reviews.findOne({ where: { venueId, userId } });
     if (existing)
       throw new ConflictException('Ви вже залишили відгук на цей заклад');
+  }
+
+  async create(
+    userId: string,
+    venueId: string,
+    dto: CreateReviewDto,
+  ): Promise<Review> {
+    await this.assertCanCreate(userId, venueId);
     const review = this.reviews.create({
       venueId,
       userId,
