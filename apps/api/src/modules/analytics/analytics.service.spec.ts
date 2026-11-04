@@ -1,10 +1,13 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { VenueView } from './entities/venue-view.entity';
 import { Venue } from '../venues/entities/venue.entity';
 import { AnalyticsEvent } from './entities/analytics-event.entity';
 import { CacheService } from '../../common/services/cache.service';
+import { VenuesService } from '../venues/venues.service';
+import { PermissionsService } from '../rbac/permissions.service';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
@@ -50,6 +53,11 @@ describe('AnalyticsService', () => {
         },
         { provide: getRepositoryToken(AnalyticsEvent), useValue: eventsRepo },
         { provide: CacheService, useValue: cache },
+        { provide: VenuesService, useValue: { findOneOrThrow: jest.fn() } },
+        {
+          provide: PermissionsService,
+          useValue: { hasPermission: jest.fn().mockResolvedValue(true) },
+        },
       ],
     }).compile();
     service = module.get(AnalyticsService);
@@ -145,10 +153,15 @@ describe('AnalyticsService.stats — діапазон дат', () => {
         },
         { provide: getRepositoryToken(AnalyticsEvent), useValue: eventsRepo },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
+        { provide: VenuesService, useValue: { findOneOrThrow: jest.fn() } },
+        {
+          provide: PermissionsService,
+          useValue: { hasPermission: jest.fn().mockResolvedValue(true) },
+        },
       ],
     }).compile();
     const service = module.get(AnalyticsService);
-    const res = await service.getForVenue('v1', '2020-01-01', '2020-12-31');
+    const res = await service.getForVenue('u1', 'v1', '2020-01-01', '2020-12-31');
     // 2+3 з запиту у діапазоні; count(120) — глобальний — більше не юзається
     expect(res.totalViews).toBe(5);
     // останній день діапазону включно: < (to + 1 день), не <= to
@@ -182,6 +195,11 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
         },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
         { provide: getRepositoryToken(Venue), useValue: venues },
+        { provide: VenuesService, useValue: { findOneOrThrow: jest.fn() } },
+        {
+          provide: PermissionsService,
+          useValue: { hasPermission: jest.fn().mockResolvedValue(true) },
+        },
       ],
     }).compile();
     const service = module.get(AnalyticsService);
@@ -211,11 +229,90 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
         },
         { provide: CacheService, useValue: cache },
         { provide: getRepositoryToken(Venue), useValue: venues },
+        { provide: VenuesService, useValue: { findOneOrThrow: jest.fn() } },
+        {
+          provide: PermissionsService,
+          useValue: { hasPermission: jest.fn().mockResolvedValue(true) },
+        },
       ],
     }).compile();
     const service = module.get(AnalyticsService);
     const res = await service.recordView('v1', 'u1', null);
     expect(res.recorded).toBe(false);
     expect(venues.increment).not.toHaveBeenCalled();
+  });
+});
+
+describe('AnalyticsService.getForVenue — доступ (власник або супер-адмін)', () => {
+  let viewsQb: any;
+  let venuesService: any;
+  let perms: any;
+  let service: AnalyticsService;
+
+  beforeEach(async () => {
+    viewsQb = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([]),
+    };
+    venuesService = { findOneOrThrow: jest.fn() };
+    perms = { hasPermission: jest.fn() };
+    const module = await Test.createTestingModule({
+      providers: [
+        AnalyticsService,
+        {
+          provide: getRepositoryToken(VenueView),
+          useValue: { createQueryBuilder: jest.fn().mockReturnValue(viewsQb) },
+        },
+        { provide: getRepositoryToken(Venue), useValue: { increment: jest.fn() } },
+        {
+          provide: getRepositoryToken(AnalyticsEvent),
+          useValue: { createQueryBuilder: jest.fn().mockReturnValue(viewsQb) },
+        },
+        { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
+        { provide: VenuesService, useValue: venuesService },
+        { provide: PermissionsService, useValue: perms },
+      ],
+    }).compile();
+    service = module.get(AnalyticsService);
+  });
+
+  it('супер-адмін з analytics:view:all проходить без походу в базу за закладом', async () => {
+    perms.hasPermission.mockResolvedValue(true);
+    const res = await service.getForVenue('u1', 'v1');
+    expect(perms.hasPermission).toHaveBeenCalledWith('u1', 'analytics:view:all');
+    expect(venuesService.findOneOrThrow).not.toHaveBeenCalled();
+    expect(res.totalViews).toBe(0);
+  });
+
+  it('власник без analytics:view:all отримує метрики', async () => {
+    perms.hasPermission.mockResolvedValue(false);
+    venuesService.findOneOrThrow.mockResolvedValue({ ownerId: 'u1' });
+    const res = await service.getForVenue('u1', 'v1');
+    expect(venuesService.findOneOrThrow).toHaveBeenCalledWith('v1');
+    expect(res.totalViews).toBe(0);
+  });
+
+  it('не-власник отримує 403 і метрики не рахуються', async () => {
+    perms.hasPermission.mockResolvedValue(false);
+    venuesService.findOneOrThrow.mockResolvedValue({ ownerId: 'other' });
+    await expect(service.getForVenue('u1', 'v1')).rejects.toThrow(
+      'Немає доступу до аналітики цього закладу',
+    );
+    expect(viewsQb.getRawMany).not.toHaveBeenCalled();
+  });
+
+  it('неіснуючий заклад для не-супер-адміна — 404 з сервісу закладів', async () => {
+    perms.hasPermission.mockResolvedValue(false);
+    venuesService.findOneOrThrow.mockRejectedValue(
+      new NotFoundException('Заклад не знайдено'),
+    );
+    await expect(service.getForVenue('u1', 'v1')).rejects.toThrow(
+      'Заклад не знайдено',
+    );
   });
 });

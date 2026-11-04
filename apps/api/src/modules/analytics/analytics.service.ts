@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VenueView } from './entities/venue-view.entity';
 import { AnalyticsEvent } from './entities/analytics-event.entity';
 import { Venue } from '../venues/entities/venue.entity';
 import { CacheService } from '../../common/services/cache.service';
+import { VenuesService } from '../venues/venues.service';
+import { PermissionsService } from '../rbac/permissions.service';
 import {
   buildMeta,
   normalizePagination,
@@ -24,6 +26,8 @@ export class AnalyticsService {
     @InjectRepository(Venue)
     private readonly venues: Repository<Venue>,
     private readonly cache: CacheService,
+    private readonly venuesService: VenuesService,
+    private readonly perms: PermissionsService,
   ) {}
 
   async recordView(
@@ -60,7 +64,22 @@ export class AnalyticsService {
     await this.eventsRepo.save({ venueId, userId, eventType, payload });
   }
 
+  /**
+   * Хто бачить аналітику закладу — сам заклад існує і юзер його власник
+   * (перевірка живе тут, у сервісі, а не в контролері). Супер-адмін з
+   * analytics:view:all повертається до походу в базу: як і раніше, неіснуючий
+   * заклад для нього — не 404, а порожні метрики.
+   */
+  private async assertCanView(userId: string, venueId: string): Promise<void> {
+    if (await this.perms.hasPermission(userId, 'analytics:view:all')) return;
+    const venue = await this.venuesService.findOneOrThrow(venueId);
+    if (venue.ownerId !== userId) {
+      throw new ForbiddenException('Немає доступу до аналітики цього закладу');
+    }
+  }
+
   async getForVenue(
+    userId: string,
     venueId: string,
     from?: string,
     to?: string,
@@ -69,6 +88,8 @@ export class AnalyticsService {
     viewsByDay: { date: string; count: number }[];
     eventsByType: { eventType: string; count: number }[];
   }> {
+    await this.assertCanView(userId, venueId);
+
     const viewsQb = this.views
       .createQueryBuilder('v')
       .select(`to_char(date_trunc('day', v."viewedAt"), 'YYYY-MM-DD')`, 'date')

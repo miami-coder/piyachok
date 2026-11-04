@@ -2,7 +2,6 @@ import {
   BadRequestException,
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Param,
   Post,
@@ -31,8 +30,6 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { AnalyticsService, type Granularity } from './analytics.service';
 import { RecordViewDto } from './dto/record-view.dto';
-import { VenuesService } from '../venues/venues.service';
-import { PermissionsService } from '../rbac/permissions.service';
 
 /**
  * Клієнтський IP для фолбек-дедупа переглядів: останнє значення
@@ -50,11 +47,7 @@ function clientIpOf(req: Request): string | null {
 @ApiTags('Analytics')
 @Controller()
 export class AnalyticsController {
-  constructor(
-    private readonly analytics: AnalyticsService,
-    private readonly venues: VenuesService,
-    private readonly perms: PermissionsService,
-  ) {}
+  constructor(private readonly analytics: AnalyticsService) {}
 
   @Public()
   @Post('venues/:id/view')
@@ -140,9 +133,10 @@ export class AnalyticsController {
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {
-    return this.assertOwnerOrAll(u.sub, id)
-      .then(() => this.analytics.getForVenue(id, from, to))
-      .then((data) => ({ data }));
+    // Хто бачить аналітику (власник або супер-адмін) вирішує сам сервіс
+    return this.analytics.getForVenue(u.sub, id, from, to).then((data) => ({
+      data,
+    }));
   }
 
   @ApiBearerAuth('access-token')
@@ -272,13 +266,5 @@ export class AnalyticsController {
     },
   ) {
     return this.analytics.getVenueStats(q);
-  }
-
-  private async assertOwnerOrAll(userId: string, venueId: string) {
-    if (await this.perms.hasPermission(userId, 'analytics:view:all')) return;
-    const venue = await this.venues.findOneOrThrow(venueId);
-    if (venue.ownerId !== userId) {
-      throw new ForbiddenException('Немає доступу до аналітики цього закладу');
-    }
   }
 }
