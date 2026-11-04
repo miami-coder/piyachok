@@ -1,56 +1,57 @@
 'use client'
 
+// Розмітка форми відгуку; стан і логіка — в useReviewForm
+// (use-review-form.ts: створення multipart / редагування PATCH), закрита
+// картка наявного відгуку з видаленням — my-review-card.tsx. Гість бачить
+// запрошення увійти замість форми.
+
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
 import { useUser } from '@/components/providers/user-provider'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Modal } from '@/components/ui/modal'
 import { FilePickerButton } from '@/components/ui/file-picker-button'
 import { Textarea } from '@/components/ui/textarea'
-import { useToast } from '@/components/ui/toast'
-import { ApiError } from '@/lib/api/parse'
-import { createVenueReview, deleteReview, updateReview } from '@/services/reviews'
-import { reviewFormSchema } from '@/lib/validation/review'
+import { useReviewForm, type MyReview } from './use-review-form'
+import { MyReviewCard } from './my-review-card'
 
-const MAX_FILE = 5 * 1024 * 1024
-const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+// Оцінка зірками — радіогрупа 1..5 (sr-only-радіо під зіркою: доступно
+// скрінрідеру, видимий лише символ зірки)
+function StarRatingInput({ value, onChange }: {
+  value: number
+  onChange: (n: number) => void
+}) {
+  return (
+    <fieldset>
+      <legend className="mb-1 text-sm font-medium">Оцінка</legend>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <label key={n} className="cursor-pointer">
+            <input
+              type="radio"
+              name="rating"
+              value={n}
+              checked={value === n}
+              onChange={() => onChange(n)}
+              className="sr-only"
+            />
+            <span className={`text-2xl ${value >= n ? 'text-amber-400' : 'text-faint'}`} aria-hidden>
+              ★
+            </span>
+            <span className="sr-only">{n}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
 
-interface MyReview { id: string; rating: number; text: string; billAmount?: number | null }
-
-// initialEditing: відкрити редактор одразу (для вбудовування у модалку —
-// my-review-item); без нього наявний відгук показується компактною карткою
 export function ReviewForm({ venueId, myReview, initialEditing = false }: {
   venueId: string
   myReview: MyReview | null
   initialEditing?: boolean
 }) {
   const { user } = useUser()
-  const { toast } = useToast()
-  const router = useRouter()
-  const reviewId = myReview?.id ?? null
-  const [editing, setEditing] = useState(Boolean(myReview) && initialEditing)
-  const [rating, setRating] = useState(myReview?.rating ?? 0)
-  const [text, setText] = useState(myReview?.text ?? '')
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [checkFile, setCheckFile] = useState<File | null>(null)
-  const [checkResetKey, setCheckResetKey] = useState(0)
-  const [billAmount, setBillAmount] = useState(myReview?.billAmount?.toString() ?? '')
-
-  // Зміна відгуку зверху (створено/видалено) — поля синхронізуємо, редактор закриваємо.
-  // Монтування пропускаємо: initialEditing уже відкрив редактор
-  const prevIdRef = useRef<string | null>(reviewId)
-  useEffect(() => {
-    if (prevIdRef.current === reviewId) return
-    prevIdRef.current = reviewId
-    setRating(myReview?.rating ?? 0)
-    setText(myReview?.text ?? '')
-    setEditing(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reviewId])
+  const form = useReviewForm(venueId, myReview, initialEditing)
 
   if (!user) {
     return (
@@ -64,141 +65,17 @@ export function ReviewForm({ venueId, myReview, initialEditing = false }: {
     )
   }
 
-  function startEdit() {
-    if (!myReview) return
-    setRating(myReview.rating)
-    setBillAmount(myReview.billAmount?.toString() ?? '')
-    setText(myReview.text)
-    setError(null)
-    setEditing(true)
-  }
-
-  // Скасування — правки відкатуються до збереженого відгуку
-  function cancelEdit() {
-    if (myReview) {
-      setRating(myReview.rating)
-      setText(myReview.text)
-    }
-    setError(null)
-    setEditing(false)
-  }
-
-  async function submit() {
-    setError(null)
-    const parsed = reviewFormSchema.safeParse({ rating, text, billAmount: billAmount ? Number(billAmount) : null })
-    if (!parsed.success) {
-      // помилки полів DTO на поля не маппимо — message першого issue інлайн
-      setError(parsed.error.issues[0]?.message ?? 'Перевірте поля')
-      return
-    }
-    const file = checkFile
-    if (file) {
-      if (!ALLOWED.includes(file.type)) {
-        setError('Фото: лише JPEG, PNG або WebP')
-        return
-      }
-      if (file.size > MAX_FILE) {
-        setError('Фото не більше 5 МБ')
-        return
-      }
-    }
-
-    setSaving(true)
-    try {
-      if (!myReview) {
-        const fd = new FormData()
-        fd.set('rating', String(parsed.data.rating))
-        fd.set('text', parsed.data.text)
-        if (billAmount) fd.set('billAmount', String(Number(billAmount)))
-        if (file) fd.set('checkPhoto', file)
-        await createVenueReview(venueId, fd)
-        // Після успішного створення форма заново чиста; вкладка «Редагувати»
-        // відкриється повністю підставленою зі свіжого myReview
-        setRating(0)
-        setText('')
-        setBillAmount('')
-        setCheckFile(null)
-        setCheckResetKey((k) => k + 1)
-      } else {
-        await updateReview(myReview.id, parsed.data)
-        setEditing(false)
-      }
-      toast(myReview ? 'Відгук оновлено' : 'Дякуємо за відгук!')
-      router.refresh()
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Сервіс тимчасово недоступний')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function remove() {
-    if (!myReview) return
-    try {
-      // DELETE → 200 з порожнім тілом: парсимо через parseEmpty (apiVoid), не parseData
-      await deleteReview(myReview.id)
-      setDeleting(false)
-      toast('Відгук видалено')
-      router.refresh()
-    } catch (e) {
-      // Модалка лишається відкритою: можна спробувати ще раз або скасувати
-      toast(e instanceof ApiError ? e.message : 'Не вдалося видалити відгук', 'error')
-      setDeleting(false)
-    }
-  }
-
   // Відгук існує й редактор закритий — компактна картка замість постійно
   // відкритої форми: створення й редагування більше не путаються
-  if (myReview && !editing) {
-    return (
-      <>
-        <div className="rounded-xl border border-line p-4">
-          <p className="text-sm text-muted">Ваш відгук опубліковано — він у списку нижче.</p>
-          <div className="mt-3 flex gap-2">
-            <Button variant="secondary" size="sm" onClick={startEdit}>
-              Редагувати
-            </Button>
-            <Button variant="danger" size="sm" onClick={() => setDeleting(true)}>
-              Видалити
-            </Button>
-          </div>
-        </div>
-        <Modal open={deleting} onClose={() => setDeleting(false)} title="Видалити відгук?">
-          <p className="text-muted">Відгук буде видалено назавжди.</p>
-          <div className="mt-4 flex gap-2">
-            <Button variant="secondary" onClick={() => setDeleting(false)}>Скасувати</Button>
-            <Button onClick={remove}>Так, видалити</Button>
-          </div>
-        </Modal>
-      </>
-    )
+  if (myReview && !form.editing) {
+    return <MyReviewCard myReview={myReview} onEdit={form.startEdit} />
   }
 
   const isEdit = Boolean(myReview)
 
   return (
     <div className="space-y-3 rounded-xl border border-line p-4">
-      <fieldset>
-        <legend className="mb-1 text-sm font-medium">Оцінка</legend>
-        <div className="flex gap-1">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <label key={n} className="cursor-pointer">
-              <input
-                type="radio"
-                name="rating"
-                value={n}
-                checked={rating === n}
-                onChange={() => setRating(n)}
-                className="sr-only"
-              />
-              <span className={`text-2xl ${rating >= n ? 'text-amber-400' : 'text-faint'}`} aria-hidden>
-                ★
-              </span>
-              <span className="sr-only">{n}</span>
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      <StarRatingInput value={form.rating} onChange={form.setRating} />
 
       <label htmlFor="review-bill" className="block text-sm font-medium">
         Сума чека, грн (необов&apos;язково)
@@ -207,8 +84,8 @@ export function ReviewForm({ venueId, myReview, initialEditing = false }: {
         id="review-bill"
         type="number"
         min="0"
-        value={billAmount}
-        onChange={(e) => setBillAmount(e.target.value)}
+        value={form.billAmount}
+        onChange={(e) => form.setBillAmount(e.target.value)}
         placeholder="Напр. 450"
       />
 
@@ -217,8 +94,8 @@ export function ReviewForm({ venueId, myReview, initialEditing = false }: {
       </label>
       <Textarea
         id="review-text"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
+        value={form.text}
+        onChange={(e) => form.setText(e.target.value)}
         placeholder="Розкажіть про враження (мінімум 10 символів)"
       />
 
@@ -233,22 +110,22 @@ export function ReviewForm({ venueId, myReview, initialEditing = false }: {
               inputLabel="Фото чеку"
               inputId="review-check"
               accept="image/jpeg,image/png,image/webp"
-              onFiles={(files) => setCheckFile(files[0] ?? null)}
-              resetKey={checkResetKey}
+              onFiles={(files) => form.setCheckFile(files[0] ?? null)}
+              resetKey={form.checkResetKey}
             />
-            <span className="text-xs text-muted">{checkFile ? checkFile.name : 'Файл не вибрано'}</span>
+            <span className="text-xs text-muted">{form.checkFile ? form.checkFile.name : 'Файл не вибрано'}</span>
           </div>
         </div>
       )}
 
-      {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+      {form.error && <p role="alert" className="text-sm text-danger">{form.error}</p>}
 
       <div className="flex gap-2">
-        <Button type="button" variant="primary" onClick={submit} disabled={saving}>
+        <Button type="button" variant="primary" onClick={form.submit} disabled={form.saving}>
           {isEdit ? 'Зберегти зміни' : 'Надіслати відгук'}
         </Button>
         {isEdit && (
-          <Button type="button" variant="secondary" onClick={cancelEdit}>
+          <Button type="button" variant="secondary" onClick={form.cancelEdit}>
             Скасувати
           </Button>
         )}
