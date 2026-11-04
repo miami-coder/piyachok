@@ -177,6 +177,38 @@ async function main() {
     console.log(`Заклад створено: «${seed.name}» (${seed.type}, статус ${status}, фото ${seed.photos.length}).`);
   }
 
+  // --- 3а. Роль venue_admin власникам апрувнутих закладів ---
+  // Сід створює заклади одразу approved (без флоу апруву з адмінки), а роль
+  // venue_admin у реальному житті видає VenuesService.approve() — тому тут
+  // доводиться добрати її самим, інакше власник демо-закладу ловить 403
+  // на статистиці переглядів свого закладу (треба пермішен analytics:view:own).
+  // У режимі --pending роль не видаємо: там сенс саме у флоу «до апруву»,
+  // роль прийде після апруву з адмінки через approve().
+  // Нюанс: при живому API кеш пермішенів у Redis (TTL 5 хв) може ще деякий
+  // час віддавати старий набір — сід має доступу до Redis і не скінить його.
+  if (status === VenueStatus.Approved) {
+    const venueAdminRole = await ds.getRepository(Role).findOne({ where: { code: 'venue_admin' } });
+    if (!venueAdminRole) throw new Error('Ролі venue_admin немає в базі — спершу прогоніть міграції.');
+    const approvedOwners = await ds.getRepository(Venue)
+      .createQueryBuilder('v')
+      .select('DISTINCT v."ownerId"', 'ownerId')
+      .where('v.status = :status', { status: VenueStatus.Approved })
+      .getRawMany<{ ownerId: string }>();
+    const emailByOwnerId = new Map([...users.entries()].map(([key, id]) => [id, USERS.find((u) => u.key === key)!.email]));
+    for (const { ownerId } of approvedOwners) {
+      const hasRole = await ds.getRepository(UserRole).findOne({
+        where: { userId: ownerId, roleId: venueAdminRole.id },
+      });
+      if (hasRole) continue;
+      await ds.getRepository(UserRole).insert({
+        userId: ownerId,
+        roleId: venueAdminRole.id,
+        assignedBy: null,
+      });
+      console.log(`  → роль venue_admin додана: ${emailByOwnerId.get(ownerId) ?? ownerId}`);
+    }
+  }
+
   // --- 4. Відгуки: по одному на заклад, рецензент ≠ власник (см. seed-demo-data.ts) ---
   let reviewsCreated = 0;
   for (const r of SEED_REVIEWS) {
