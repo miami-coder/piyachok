@@ -25,11 +25,11 @@ beforeEach(() => {
 
 describe('CallbackClient', () => {
   it('надсилає токени ТІЛОМ на /api/auth/oauth, потім ПОВНЕ перевантаження на /', async () => {
-    const fetchMock = vi.fn(async () => okRes())
+    const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => okRes())
     vi.stubGlobal('fetch', fetchMock)
     render(<CallbackClient />)
     await waitFor(() => expect(locationReplace).toHaveBeenCalledWith('/'))
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('/api/auth/oauth')
     // токени йдуть ТІЛОМ, не в URL: URL чистий, а тіло містить обидва токени
     expect(url).not.toContain('AT')

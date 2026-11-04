@@ -10,6 +10,7 @@ import { ReviewsService } from './reviews.service';
 import { Review } from './entities/review.entity';
 import { Venue } from '../venues/entities/venue.entity';
 import { PermissionsService } from '../rbac/permissions.service';
+import type { SanitizedUser } from '../../common/utils/sanitize-user';
 
 function qb() {
   return {
@@ -353,7 +354,7 @@ describe('ReviewsService.listForVenue — видалений автор', () => 
     }).compile();
     service = module.get(ReviewsService);
     const res = await service.listForVenue('v1');
-    const u = res.data[0].user as Record<string, unknown>;
+    const u = res.data[0].user as SanitizedUser;
     expect(u.isDeleted).toBe(true);
     expect(u.profile).toEqual({
       firstname: 'Обліковий запис',

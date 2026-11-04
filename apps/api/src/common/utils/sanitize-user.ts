@@ -6,9 +6,20 @@ import { User } from '../../modules/users/entities/user.entity';
  * куди анонім не має права зазирати. Телефон — теж приватний (PII),
  * фронт у owner-профілі читає лише імʼя/аватар. Профіль — білим списком.
  */
+export interface SanitizedUser {
+  id: string;
+  isDeleted?: boolean;
+  profile: {
+    firstname: string;
+    lastname?: string;
+    age?: number | null;
+    avatarUrl?: string | null;
+  } | null;
+}
+
 export function sanitizeUser(
   user: User | null | undefined,
-): Record<string, unknown> | null | undefined {
+): SanitizedUser | null | undefined {
   if (!user) return user;
   // Видалений автор: позначка замість персональних даних.
   if (user.deletedAt) {

@@ -32,7 +32,9 @@ export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
     accessToken: string,
     refreshToken: string,
     profile: Profile,
-    done: (err: any, user: any) => void,
+    // Типізований done (замість any-підпису у VerifyFunction пасажпорта):
+    // стратегія повертає підзапис { id, email } або помилку.
+    done: (error: Error | null, user?: { id: string; email: string }) => void,
   ) {
     const email =
       profile.emails?.[0]?.value ?? `${profile.id}@facebook.placeholder`;

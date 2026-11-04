@@ -15,7 +15,7 @@ function makeHost(): ArgumentsHost {
       getResponse: () => ({ status }),
       getRequest: () => ({ method: 'GET', url: '/x' }),
     }),
-  } as unknown as ArgumentsHost;
+  } as ArgumentsHost;
 }
 
 describe('AllExceptionsFilter', () => {
@@ -29,8 +29,7 @@ describe('AllExceptionsFilter', () => {
 
   it('formats HttpException with string response', () => {
     filter.catch(new NotFoundException('Not found'), host);
-    const statusMock = host.switchToHttp().getResponse()
-      .status as unknown as jest.Mock;
+    const statusMock = host.switchToHttp().getResponse().status as jest.Mock;
     const call = statusMock.mock.results[0].value.json.mock.calls[0][0];
     expect(statusMock).toHaveBeenCalledWith(404);
     expect(call.error.code).toBe('NOT_FOUND');
@@ -45,8 +44,7 @@ describe('AllExceptionsFilter', () => {
       }),
       host,
     );
-    const statusMock = host.switchToHttp().getResponse()
-      .status as unknown as jest.Mock;
+    const statusMock = host.switchToHttp().getResponse().status as jest.Mock;
     const call = statusMock.mock.results[0].value.json.mock.calls[0][0];
     expect(statusMock).toHaveBeenCalledWith(400);
     expect(call.error.message).toBe('email invalid; password short');
@@ -55,8 +53,7 @@ describe('AllExceptionsFilter', () => {
 
   it('handles unknown errors with 500', () => {
     filter.catch(new Error('boom'), host);
-    const statusMock = host.switchToHttp().getResponse()
-      .status as unknown as jest.Mock;
+    const statusMock = host.switchToHttp().getResponse().status as jest.Mock;
     expect(statusMock).toHaveBeenCalledWith(500);
   });
 });
@@ -70,7 +67,7 @@ describe('AllExceptionsFilter — невалідний UUID', () => {
         getResponse: () => ({ status: jest.fn().mockReturnValue({ json }) }),
         getRequest: () => ({ method: 'GET', url: '/x' }),
       }),
-    } as unknown as ArgumentsHost;
+    } as ArgumentsHost;
     const err = new Error(
       'invalid input syntax for type uuid: "abc"',
     ) as Error & { code?: string };
@@ -91,7 +88,7 @@ describe('AllExceptionsFilter — невалідний UUID', () => {
         getResponse: () => ({ status: jest.fn().mockReturnValue({ json }) }),
         getRequest: () => ({ method: 'GET', url: '/x' }),
       }),
-    } as unknown as ArgumentsHost;
+    } as ArgumentsHost;
     filter.catch(new Error('boom'), host);
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({

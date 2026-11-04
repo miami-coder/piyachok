@@ -17,6 +17,7 @@ import { FileStorageService } from '../../common/services/file-storage.service';
 import { Role } from '../rbac/entities/role.entity';
 import { UserRole } from '../rbac/entities/user-role.entity';
 import { AuditService } from '../admin/audit.service';
+import type { SanitizedUser } from '../../common/utils/sanitize-user';
 
 function qb() {
   return {
@@ -285,15 +286,19 @@ describe('VenuesService', () => {
   it('search: recommended=1 — only рекомендовані критиком (/,top), фільтр іде в where', async () => {
     const mockQb = venues.createQueryBuilder();
     await service.search({ page: 1, limit: 12, recommended: '1' });
-    const sqls = mockQb.andWhere.mock.calls.map((c) => c[0] as string);
+    const sqls = mockQb.andWhere.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
     expect(sqls).toContain('v.recommendedBy IS NOT NULL');
   });
 
   it('search без recommended — клаузи рекомендацій у where НЕ додаються (каталог не лізе у вибір критика)', async () => {
     const mockQb = venues.createQueryBuilder();
     await service.search({ page: 1, limit: 12 });
-    const sqls = mockQb.andWhere.mock.calls.map((c) => c[0] as string);
-    expect(sqls.some((s) => s.includes('recommendedBy'))).toBe(false);
+    const sqls = mockQb.andWhere.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
+    expect(sqls.some((s: string) => s.includes('recommendedBy'))).toBe(false);
   });
 
   it('search: фічі/теги — AND-семантика (заклад має ВСІ запитані), CSV не втрачає значення', async () => {
@@ -304,16 +309,20 @@ describe('VenuesService', () => {
       tag: ' cocktails, dj ',
       feature: 'wifi, parking',
     });
-    const sqls = mockQb.andWhere.mock.calls.map((c) => c[0] as string);
+    const sqls = mockQb.andWhere.mock.calls.map(
+      (c: unknown[]) => c[0] as string,
+    );
     // Для КОЖНОГО запитаного коду свій EXISTS-підзапит (AND), а не один IN (OR)
     for (const code of ['wifi', 'parking']) {
       expect(
-        sqls.some((s) => s.includes('EXISTS') && s.includes('f2.code = :')),
+        sqls.some(
+          (s: string) => s.includes('EXISTS') && s.includes('f2.code = :'),
+        ),
       ).toBe(true);
     }
     const andParams = mockQb.andWhere.mock.calls
       .flat()
-      .filter((x) => typeof x === 'object' && x !== null) as Record<
+      .filter((x: unknown) => typeof x === 'object' && x !== null) as Record<
       string,
       string
     >[];
@@ -611,11 +620,11 @@ describe('VenuesService.findOnePublic — санітизація власник�
       1,
     ]);
     const res = await service.findApproved(1, 20);
-    const own = res.data[0].owner as unknown as Record<string, unknown>;
+    const own = res.data[0].owner as SanitizedUser;
     expect(own).not.toHaveProperty('passwordHash');
     expect(own).not.toHaveProperty('email');
-    expect((own.profile as Record<string, unknown>).phone).toBeUndefined();
-    expect((own.profile as Record<string, unknown>).firstname).toBe('Олег');
+    expect((own.profile as { phone?: unknown }).phone).toBeUndefined();
+    expect(own.profile?.firstname).toBe('Олег');
   });
 });
 
@@ -799,7 +808,7 @@ describe('VenuesService.search — %/_ літерали, не wildcard', () => {
     const calls = venues.createQueryBuilder().andWhere.mock.calls;
     // ILIKE живе в Brackets — розгортаємо фабрику проти фейкового будівника
     const bracketArg = calls
-      .map((c) => c[0])
+      .map((c: unknown[]) => c[0])
       .find((a: any) => a && typeof a.whereFactory === 'function');
     expect(bracketArg).toBeTruthy();
     const rec: { sql: string[]; params: Record<string, unknown>[] } = {

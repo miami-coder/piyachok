@@ -51,7 +51,6 @@ beforeEach(() => {
 
 // top.page — async-серверний компонент: спершу await, потім статичний рендер
 async function html(): Promise<string> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return renderToStaticMarkup(await TopPage() as any)
 }
 

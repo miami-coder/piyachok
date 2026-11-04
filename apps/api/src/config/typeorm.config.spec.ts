@@ -4,7 +4,7 @@ import { ConfigService } from '@nestjs/config';
 function mockConfig(vars: Record<string, string>): ConfigService {
   return {
     get: <K = string>(key: string) => vars[key] as K,
-  } as unknown as ConfigService;
+  } as ConfigService;
 }
 
 describe('typeOrmAsyncConfig', () => {

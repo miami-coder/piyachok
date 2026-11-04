@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getAdminReviewsPage } from '@/services/reviews.server'
 import { getSessionTokens } from '@/lib/auth/session'
-import { parseAdminReview, type RawReview } from '@/types/review'
+import { parseAdminReview } from '@/types/review'
 import { formatDate } from '@/lib/utils/format'
 import { Pagination } from '@/components/ui/pagination'
 import { AdminReviewActions } from '@/components/features/admin/admin-review-actions'

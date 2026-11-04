@@ -6,19 +6,30 @@ import { RatingStars } from '@/components/ui/rating-stars'
 import { placeholderFor } from '@/lib/utils/placeholder'
 import type { Venue } from '@/types/venue'
 
-export function VenueCard({
-  venue,
-  variant = 'default',
-  place,
-}: {
-  venue: Venue
-  // compact — маленька плитка (Топ/«Рекомендовані критиком» на /top):
-  // тільки фото + назва + зірки, без адреси/чеку/типів/тегів
-  variant?: 'default' | 'compact'
-  // номер місця (Топ) — бейдж у кутку фото; для критика не передається
-  place?: number
-}) {
-  if (variant === 'compact') {
+/**
+ * compact — маленька плитка (Топ/«Рекомендовані критиком» на /top):
+ * тільки фото + назва + зірки, без адреси/чеку/типів/тегів. Плита Топу
+ * прилітає з /top пласкою — повний Venue їй не потрібен (це знімає
+ * подвійний каст на сторінці), тому дискримінований union замість одного
+ * venue: Venue.
+ */
+type VenueCardProps =
+  | {
+      venue: Venue
+      variant?: 'default'
+      place?: number
+    }
+  | {
+      venue: Pick<Venue, 'id' | 'name' | 'mainPhotoUrl' | 'ratingAvg'> & {
+        recommendedBy?: Venue['recommendedBy']
+      }
+      variant: 'compact'
+      place?: number
+    }
+
+export function VenueCard(props: VenueCardProps) {
+  if (props.variant === 'compact') {
+    const { venue, place } = props
     return (
       <Link
         href={`/venues/${venue.id}`}
@@ -56,6 +67,7 @@ export function VenueCard({
       </Link>
     )
   }
+  const { venue } = props
   return (
     <Link
       href={`/venues/${venue.id}`}

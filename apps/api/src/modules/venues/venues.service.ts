@@ -214,8 +214,7 @@ export class VenuesService {
       .andWhere('v.status = :status', { status: VenueStatus.Approved })
       .getOne();
     if (!venue) throw new NotFoundException('Заклад не знайдено');
-    if (venue.owner)
-      venue.owner = sanitizeUser(venue.owner) as unknown as Venue['owner'];
+    if (venue.owner) venue.owner = sanitizeUser(venue.owner) as Venue['owner'];
     return venue;
   }
 
@@ -295,7 +294,7 @@ export class VenuesService {
   async search(query: QueryVenuesDto) {
     const { page, limit, offset } = normalizePagination(query);
     const cacheKey = `venues:list:${this.hashQuery(query)}`;
-    const cached = await this.cache.get<{ data: any[]; total: number }>(
+    const cached = await this.cache.get<{ data: Venue[]; total: number }>(
       cacheKey,
     );
     if (cached) {
@@ -437,7 +436,7 @@ export class VenuesService {
       relations: { owner: { profile: true } },
     });
     const data = rows.map((v) => {
-      if (v.owner) v.owner = sanitizeUser(v.owner) as unknown as Venue['owner'];
+      if (v.owner) v.owner = sanitizeUser(v.owner) as Venue['owner'];
       return v;
     });
     return { data, meta: buildMeta({ page, limit, offset }, total) };

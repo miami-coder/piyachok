@@ -36,10 +36,15 @@ describe('FacebookStrategy', () => {
 
     let doneErr: any;
     let doneUser: any;
-    await strategy.validate('tok', 'ref', profile, (err, user) => {
-      doneErr = err;
-      doneUser = user;
-    });
+    await strategy.validate(
+      'tok',
+      'ref',
+      profile,
+      (err: unknown, user: { id: string; email: string }) => {
+        doneErr = err;
+        doneUser = user;
+      },
+    );
 
     expect(users.findOrCreateOAuthUser).toHaveBeenCalledWith(
       'e@x.com',
@@ -63,9 +68,14 @@ describe('FacebookStrategy', () => {
     } as any;
 
     let doneUser: any;
-    await strategy.validate('tok', 'ref', profile, (_e, user) => {
-      doneUser = user;
-    });
+    await strategy.validate(
+      'tok',
+      'ref',
+      profile,
+      (_e: unknown, user: { id: string; email: string }) => {
+        doneUser = user;
+      },
+    );
 
     expect(users.findOrCreateOAuthUser).toHaveBeenCalledWith(
       'fb-1@facebook.placeholder',

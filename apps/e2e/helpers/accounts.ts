@@ -71,6 +71,8 @@ interface LiveState {
   email: string
   password: string
   ageMs: number
+  // стан сесії живого юзера із storageState; пишеться в записі файлу (нижче)
+  state?: string
 }
 
 /** Живе e2e-обличчя на прогін: реєстрація вичерпує квоту бек-тротлера
@@ -105,7 +107,7 @@ export async function ensureE2eUser(browser: Browser): Promise<{ email: string; 
       await page.getByRole('button', { name: 'Увійти', exact: true }).click()
       await expect(page.getByRole('banner').getByRole('link', { name: 'Увійти', exact: true })).toHaveCount(0, { timeout: 15_000 })
       // юзер живий — логін вдався
-      await page.context().storageState({ path: (live as unknown as { state: string }).state ?? '/tmp/piyachok-e2e-live-state.json' })
+      await page.context().storageState({ path: live.state ?? '/tmp/piyachok-e2e-live-state.json' })
       await ctx.close()
       return { email: live.email, password: live.password }
     } catch {

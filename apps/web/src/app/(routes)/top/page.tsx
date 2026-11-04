@@ -3,7 +3,7 @@
 // критиком» — компактні плитки закладів з прапором критика. SSR через BFF.
 
 import { VenueCard } from '@/components/features/venues/venue-card'
-import { parseVenue, type Venue } from '@/types/venue'
+import { parseVenue } from '@/types/venue'
 import { getRecommendedVenues, getTop } from '@/services/top.server'
 
 export const metadata = { title: 'Топ закладів — Пиячок' }
@@ -41,9 +41,9 @@ export default async function TopPage() {
             <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
               {c.venues.map((v, place) => (
                 <li key={v.id}>
-                  {/* top/page не має повного Venue з types/tags — плаский
-                      обʼєкт /top достатній компакт-варіанту */}
-                  <VenueCard venue={v as unknown as Venue} variant="compact" place={place + 1} />
+                  {/* top/page не має повного Venue з types/tags — VenueCard
+                      у compact-гілці приймає плаский підтип */}
+                  <VenueCard venue={v} variant="compact" place={place + 1} />
                 </li>
               ))}
             </ul>

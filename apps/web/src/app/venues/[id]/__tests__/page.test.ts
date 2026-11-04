@@ -44,8 +44,16 @@ const venue = {
   features: [],
   workingHours: {},
   contacts: {},
+  ownerId: 'u1',
+  latitude: null,
+  longitude: null,
+  status: 'approved',
+  recommendedBy: null,
+  viewCount: 0,
+  createdAt: '2026-09-01T10:00:00Z',
+  updatedAt: '2026-09-01T10:00:00Z',
   description: 'Тут смачно',
-} as unknown as Venue
+} satisfies Venue
 
 const rawNews = {
   id: 'n1', venueId: 'v1', category: 'general', title: 'Акустика у пʼятницю', content: 'Текст новини',

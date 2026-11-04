@@ -16,6 +16,19 @@ const eslintConfig = defineConfig([
     ".claude/**",
     ".superpowers/**",
   ]),
+  {
+    rules: {
+      // Явний any у продукційному коді заборонено: типізація замість касти.
+      "@typescript-eslint/no-explicit-any": "error",
+    },
+  },
+  // Тести: моки свідомо не типізовані як прод — явний any дозволено.
+  {
+    files: ["**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

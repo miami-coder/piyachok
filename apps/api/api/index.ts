@@ -4,7 +4,7 @@ import { NestFactory } from '@nestjs/core';
 // пакує pg у лямбду → DriverPackageNotInstalledError. Переконатися заздалегідь.
 import 'pg';
 import { ExpressAdapter } from '@nestjs/platform-express';
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/app.setup';
 
@@ -16,7 +16,7 @@ import { configureApp } from '../src/app.setup';
  * і є Node-хендлером — обгортка @vendia/serverless-express тут не потрібна
  * (вона чекає AWS-пейлоади і кидає Unable to determine event source).
  */
-type NodeHandler = (req: unknown, res: unknown) => void;
+type NodeHandler = (req: Request, res: Response) => void;
 
 let handlerPromise: Promise<NodeHandler> | undefined;
 
@@ -31,7 +31,7 @@ async function getHandler(): Promise<NodeHandler> {
       ///uploads роздача не потрібна: на проді — Vercel Blob, локально — main.ts.
       configureApp(app, { staticUploads: false, swagger: false });
       await app.init();
-      return expressApp as unknown as NodeHandler;
+      return expressApp as NodeHandler;
     })().catch((err) => {
       handlerPromise = undefined;
       throw err;
@@ -40,7 +40,7 @@ async function getHandler(): Promise<NodeHandler> {
   return handlerPromise;
 }
 
-export async function handler(req: unknown, res: unknown): Promise<void> {
+export async function handler(req: Request, res: Response): Promise<void> {
   const handle = await getHandler();
   return handle(req, res);
 }

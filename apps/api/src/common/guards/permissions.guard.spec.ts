@@ -12,19 +12,20 @@ function makeCtx(
     getHandler: () => handler,
     getClass: () => (classMeta.length ? { prototype: {} } : function () {}),
     switchToHttp: () => ({ getRequest: () => ({ user }) }),
-  } as unknown as ExecutionContext;
+  } as ExecutionContext;
 }
 
 describe('PermissionsGuard', () => {
   let guard: PermissionsGuard;
   let reflector: Reflector;
-  let perms: { hasAnyPermission: jest.Mock };
+  let perms: { hasAnyPermission: jest.Mock }; // тести читають .mockResolvedValue
 
   beforeEach(() => {
     reflector = new Reflector();
     perms = { hasAnyPermission: jest.fn().mockResolvedValue(false) };
     guard = new PermissionsGuard(
       reflector,
+      // Подвійний каст: мок jest.fn з реальним типом методу сервісу не порівнюється ані в один бік.
       perms as unknown as PermissionsService,
     );
   });

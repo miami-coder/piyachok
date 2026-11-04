@@ -16,7 +16,7 @@ describe('sanitizeUser', () => {
         avatarUrl: null,
         phone: '+38099…',
       },
-    } as unknown as User;
+    } as User;
     const s = sanitizeUser(u);
     expect(s).toEqual({
       id: 'u1',
@@ -31,7 +31,7 @@ describe('sanitizeUser', () => {
       passwordHash: '$2b$10$secret',
       deletedAt: new Date(),
       profile: { firstname: 'Тарас', lastname: 'Г', phone: '+380…' },
-    } as unknown as User;
+    } as User;
     const s = sanitizeUser(u);
     expect(s).toEqual({
       id: 'u2',
