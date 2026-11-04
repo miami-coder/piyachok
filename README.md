@@ -28,12 +28,14 @@ piyachok/
 
 ```bash
 pnpm install
-# скопіюйте .env (архів від автора проєкту) у apps/api/.env
-# (шаблон — apps/api/.env.example; JWT/DB-секрети обовʼязкові — без них стартує fail-fast)
+# .env із заповненими ключами йде в архіві проєкту → покладіть його в apps/api/.env
+# (apps/api/.env.example — тільки довідник імен ключів, значення там порожні;
+# JWT/DB-секрети обовʼязкові — без них api стартує fail-fast)
 
-pnpm db:up          # postgres + redis у docker
-pnpm migrate        # міграції + сеється супер-адмін admin@gmail.com / Admin1234
-pnpm dev            # api :3000 + web :3001 паралельно
+pnpm db:up            # postgres + redis у docker
+pnpm migrate          # накочує міграції
+pnpm seed:superadmin  # сіє супер-адміна admin@gmail.com / Admin1234
+pnpm dev              # api :3000 + web :3001 паралельно
 ```
 
 Опційно демо-дані (3 юзери, 15 закладів, відгуки, новини з фото — офлайн):

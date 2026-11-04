@@ -20,24 +20,20 @@ NestJS API для каталогу закладів «Пиячок» (`:3000`, �
 
 ## Запуск через Docker
 
-1. Скопіюй зразок конфігу і заповни значення (JWT/DB-секрети обовʼязкові — без них стартує fail-fast):
+Compose-файл один — у корені монорепо (у цій папці лежить лише `docker-compose.test.yml` для e2e). `.env` із заповненими ключами йде в архіві проєкту → покладіть його в `apps/api/.env`; `apps/api/.env.example` — тільки довідник імен ключів, значення там порожні (JWT/DB-секрети обовʼязкові — без них api стартує fail-fast).
 
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Підніми стек (postgres + redis + бекенд з hot-reload; міграції накочує окремий контейнер `migrate` автоматично, слідом сіється супер-адмін `admin@gmail.com` / `Admin1234` — якщо такий користувач уже є в базі, створення пропускається; перекрити креді можна через `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` у `.env`):
+1. З кореня монорепо підніми стек (postgres + redis + бекенд з hot-reload; міграції накочує окремий контейнер `migrate` автоматично, слідом сіється супер-адмін `admin@gmail.com` / `Admin1234` — якщо такий користувач уже є в базі, створення пропускається; перекрити креді можна через `SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_PASSWORD` у `.env`):
 
    ```bash
    docker compose up -d
    ```
 
-   Логи: `docker compose logs -f backend`. Зупинка: `docker compose down`.
+   Логи: `docker compose logs -f api`. Зупинка: `docker compose down`.
 
    Підказка: якщо змінилися `package.json`, образ контейнерів треба перезібрати —
-   `docker compose build migrate backend`, інакше старий образ не знайде нові скрипти.
+   `docker compose build migrate api`, інакше старий образ не знайде нові скрипти.
 
-3. API: `http://localhost:3000/api/v1`, Swagger (у dev): `http://localhost:3000/api/v1/docs`.
+2. API: `http://localhost:3000/api/v1`, Swagger (у dev): `http://localhost:3000/api/v1/docs`.
 
 ## Демо-дані (seed)
 

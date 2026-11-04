@@ -11,17 +11,19 @@
 - **Zod** — валідація форм на клієнті (реєстрація, подача закладу, відгук, новина, зустріч, скарга) до відправки на бекенд.
 - **Vitest + Testing Library + jsdom** — unit і компонентні тести (сторінки, компоненти, BFF, `lib/`), команда `pnpm test`.
 - **ESLint 9 + eslint-config-next** — лінт за правилами Next.js.
-- **pnpm**, Node 22, Docker (compose для dev-стека).
+- **pnpm**, Node 22, Docker (спільний compose-стек у корені монорепо).
 
 ## Запуск через Docker
 
+Compose-файл спільний для всього стека і лежить у корені монорепо (у цій папці compose-файлу немає):
+
 ```bash
-docker compose up -d
+docker compose up -d --build web
 ```
 
-Підніме фронтенд на `http://localhost:3001` з hot-reload (вихідники змонтує з диска, перезбірка не потрібна). `BACKEND_URL` всередині контейнера сам вийде на хост-бекенд (`http://host.docker.internal:3000`), нічого конфігурувати не треба.
+Підніме сервіс `web` на `http://localhost:3001`; `BACKEND_URL` у нього прописаний на контейнер `api` того ж стека, нічого конфігурувати не треба. Hot-reload у контейнері не передбачений — вихідники запікаються в образ, тож після змін фронта перезберіть (`docker compose up -d --build web`); для розробки з hot-reload запускайте локально (`pnpm dev`).
 
-Логи: `docker compose logs -f frontend`. Зупинка: `docker compose down`.
+Логи: `docker compose logs -f web`. Зупинка: `docker compose down`.
 
 ## Запуск без Docker
 
