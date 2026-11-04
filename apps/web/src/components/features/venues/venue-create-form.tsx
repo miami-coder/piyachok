@@ -1,145 +1,62 @@
 'use client'
 
-// Форма подання закладу: zod-валідація Task 3 (venueCreateSchema) перед
-// POST /venues → 201. Порожні опційні поля НЕ надсилаємо (whitelist на
-// бекенді, порожні рядки ламали б MinLength/regex), успіх → модераційний
-// редірект на кабінет з ?created=1. Помилки валідації — по-полівну під
-// інпутом (роль alert + aria-describedby), з іменем поля в тексті.
+// Розмітка форми подання закладу; увесь стан і логіка — в useVenueCreateForm
+// (use-venue-create-form.ts): zod-валідація перед
+// POST /venues → 201, помилки валідації — по-полівно під інпутом (роль
+// alert + aria-describedby), успіх → модераційний редірект на кабінет.
+// Field — повторюваний патерн «лейбл + елемент + помилка під ним».
 
-import { useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { createVenue, uploadVenuePhoto } from '@/services/venues'
-import { ApiError } from '@/lib/api/parse'
-import { venueCreateSchema, WH_DAYS, csvToArray } from '@/lib/validation/venue'
 import { FilePickerButton } from '@/components/ui/file-picker-button'
+import { WH_DAYS } from '@/lib/validation/venue'
+import { DAY_LABELS, MAX_PHOTOS, useVenueCreateForm } from './use-venue-create-form'
 
-// Ліміт фото при поданні (решту можна додати у вкладці «Фото» кабінету)
-const MAX_PHOTOS = 4
-
-const DAY_LABELS: Record<string, string> = {
-  monday: 'Понеділок', tuesday: 'Вівторок', wednesday: 'Середа', thursday: 'Четвер',
-  friday: 'Пʼятниця', saturday: 'Субота', sunday: 'Неділя',
+// Зірочка — видимий маркер обовʼязковості, прихована від скрінрідера
+// (вимогу передає aria-required на інпуті). span2 — ширші поля 2-колоночної
+// сітки (кластер C2).
+function Field({ id, label, required = false, error, span2 = false, children }: {
+  id: string
+  label: string
+  required?: boolean
+  error?: string
+  span2?: boolean
+  children: ReactNode
+}) {
+  return (
+    <div className={`text-sm${span2 ? ' sm:col-span-2' : ''}`}>
+      <label htmlFor={id}>
+        {label}
+        {required && (
+          <span aria-hidden="true" className="text-danger">{' '}*</span>
+        )}
+      </label>
+      {children}
+      {error && (
+        <span id={`${id}-error`} role="alert" className="mt-1 block text-danger">{error}</span>
+      )}
+    </div>
+  )
 }
 
-// Людські назви полів для по-полівних помилок (ключ — zod-issue path)
-const FIELD_LABELS: Record<string, string> = {
-  name: 'Назва',
-  address: 'Адреса',
-  latitude: 'Широта',
-  longitude: 'Довгота',
-  description: 'Опис',
-  'contacts.phone': 'Телефон',
-  'contacts.instagram': 'Instagram',
-  'contacts.facebook': 'Facebook',
-  'contacts.website': 'Сайт',
-  workingHours: 'Години роботи',
-  averageCheck: 'Середній чек (₴)',
-  featureCodes: 'Фічі',
-  tagSlugs: 'Теги',
-  typeSlug: 'Тип',
-}
-
-function fieldLabel(path: ReadonlyArray<PropertyKey>): string {
-  const key = path.join('.')
-  if (key.startsWith('workingHours.')) {
-    const day = String(path[path.length - 1])
-    return `Години роботи (${DAY_LABELS[day] ?? day})`
-  }
-  return FIELD_LABELS[key] ?? key
+// describedBy — id span-помилки під полем (порожній, коли помилки немає)
+function describedBy(id: string, error?: string): string | undefined {
+  return error ? `${id}-error` : undefined
 }
 
 export function VenueCreateForm() {
-  const router = useRouter()
-  const [name, setName] = useState('')
-  const [address, setAddress] = useState('')
-  const [latitude, setLatitude] = useState('')
-  const [longitude, setLongitude] = useState('')
-  const [description, setDescription] = useState('')
-  const [phone, setPhone] = useState('')
-  const [instagram, setInstagram] = useState('')
-  const [facebook, setFacebook] = useState('')
-  const [website, setWebsite] = useState('')
-  const [hours, setHours] = useState<Record<string, string>>({})
-  const [averageCheck, setAverageCheck] = useState('')
-  const [featureCodes, setFeatureCodes] = useState('')
-  const [tagSlugs, setTagSlugs] = useState('')
-  const [typeSlug, setTypeSlug] = useState('')
-  const [photos, setPhotos] = useState<File[]>([])
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [error, setError] = useState<string | null>(null)
-  const [sending, setSending] = useState(false)
-
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    setError(null)
-    setFieldErrors({})
-    const workingHours = Object.fromEntries(
-      Object.entries(hours).filter(([, v]) => v.trim()),
-    )
-    const dto = {
-      name,
-      address,
-      latitude: latitude.trim() ? Number(latitude) : undefined,
-      longitude: longitude.trim() ? Number(longitude) : undefined,
-      description: description.trim() || undefined,
-      contacts: (phone.trim() || instagram.trim() || facebook.trim() || website.trim())
-        ? {
-            ...(phone.trim() ? { phone } : {}),
-            ...(instagram.trim() ? { instagram } : {}),
-            ...(facebook.trim() ? { facebook } : {}),
-            ...(website.trim() ? { website } : {}),
-          }
-        : undefined,
-      workingHours: Object.keys(workingHours).length ? workingHours : undefined,
-      averageCheck: averageCheck.trim() ? Number(averageCheck) : undefined,
-      featureCodes: csvToArray(featureCodes).length ? csvToArray(featureCodes) : undefined,
-      tagSlugs: csvToArray(tagSlugs).length ? csvToArray(tagSlugs) : undefined,
-      typeSlug: typeSlug.trim() || undefined,
-    }
-    const parsed = venueCreateSchema.safeParse(dto)
-    if (!parsed.success) {
-      // Кожна issue — під своїм інпутом: ключ = zod path, текст = «Поле: причина»
-      const errors: Record<string, string> = {}
-      for (const issue of parsed.error.issues) {
-        const key = issue.path.length ? issue.path.join('.') : '_'
-        if (!errors[key]) errors[key] = `${fieldLabel(issue.path)}: ${issue.message}`
-      }
-      setFieldErrors(errors)
-      return
-    }
-    setSending(true)
-    try {
-      const created = await createVenue(parsed.data)
-      // Фото — після створення (ендпоінт привʼязаний до id): по одному файлу
-      // на запит. Помилка окремого фото не скасовує подання (заклад уже
-      // створений) — редірект іде далі, повторно завантажити можна у
-      // вкладці «Фото» кабінету.
-      for (const file of photos) {
-        if (!created) break // id немає (напр., порожнє тіло) — фото нікуди слати
-        await uploadVenuePhoto(created.id, file)
-      }
-      router.push('/account/venues?created=1')
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Не вдалося подати заклад')
-      setSending(false)
-    }
-  }
-
-  const err = (key: string) =>
-    fieldErrors[key] && (
-      <span role="alert" className="mt-1 block text-danger">{fieldErrors[key]}</span>
-    )
-
-  // Зірочка — видимий маркер обовʼязковості, прихована від скрінрідера
-  // (вимога передає aria-required на інпуті)
-  const req = (
-    <span aria-hidden="true" className="text-danger">
-      {' '}*
-    </span>
-  )
+  const {
+    name, setName, address, setAddress,
+    latitude, setLatitude, longitude, setLongitude,
+    description, setDescription,
+    phone, setPhone, instagram, setInstagram, facebook, setFacebook, website, setWebsite,
+    hours, setHours, averageCheck, setAverageCheck,
+    featureCodes, setFeatureCodes, tagSlugs, setTagSlugs, typeSlug, setTypeSlug,
+    photos, addPhotos, removePhoto,
+    fieldErrors, error, sending, submit,
+  } = useVenueCreateForm()
 
   return (
     // noValidate: нативні бульбашки конфліктують з інлайн-помилками (як у register-form)
@@ -150,48 +67,38 @@ export function VenueCreateForm() {
       className="grid grid-cols-1 gap-4 rounded-xl border border-line bg-surface p-5 sm:grid-cols-2"
       aria-label="Створення закладу"
     >
-      <div className="text-sm">
-        <label htmlFor="vn-name">Назва{req}</label>
+      <Field id="vn-name" label="Назва" required error={fieldErrors.name}>
         <Input
           id="vn-name"
           required
           aria-required="true"
-          aria-describedby={fieldErrors.name ? 'vn-name-error' : undefined}
+          aria-describedby={describedBy('vn-name', fieldErrors.name)}
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="mt-1 w-full"
         />
-        {fieldErrors.name && (
-          <span id="vn-name-error" role="alert" className="mt-1 block text-danger">{fieldErrors.name}</span>
-        )}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="vn-address">Адреса{req}</label>
+      </Field>
+      <Field id="vn-address" label="Адреса" required error={fieldErrors.address}>
         <Input
           id="vn-address"
           required
           aria-required="true"
-          aria-describedby={fieldErrors.address ? 'vn-address-error' : undefined}
+          aria-describedby={describedBy('vn-address', fieldErrors.address)}
           value={address}
           onChange={(e) => setAddress(e.target.value)}
           className="mt-1 w-full"
         />
-        {fieldErrors.address && (
-          <span id="vn-address-error" role="alert" className="mt-1 block text-danger">{fieldErrors.address}</span>
-        )}
-      </div>
-      <div className="text-sm sm:col-span-2">
-        <label htmlFor="vn-description">Опис</label>
+      </Field>
+      <Field id="vn-description" label="Опис" span2>
         <Textarea
           id="vn-description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           className="mt-1 w-full"
         />
-      </div>
+      </Field>
       {/* Координати опційні: без них заклад не бере участі у пошуку «Поблизу» */}
-      <div className="text-sm">
-        <label htmlFor="vn-lat">Широта</label>
+      <Field id="vn-lat" label="Широта" error={fieldErrors.latitude}>
         <Input
           id="vn-lat"
           type="number"
@@ -199,15 +106,13 @@ export function VenueCreateForm() {
           min="-90"
           max="90"
           placeholder="напр. 50.4501"
-          aria-describedby={fieldErrors.latitude ? 'vn-lat-error' : undefined}
+          aria-describedby={describedBy('vn-lat', fieldErrors.latitude)}
           value={latitude}
           onChange={(e) => setLatitude(e.target.value)}
           className="mt-1 w-full"
         />
-        {err('latitude')}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="vn-lng">Довгота</label>
+      </Field>
+      <Field id="vn-lng" label="Довгота" error={fieldErrors.longitude}>
         <Input
           id="vn-lng"
           type="number"
@@ -215,13 +120,12 @@ export function VenueCreateForm() {
           min="-180"
           max="180"
           placeholder="напр. 30.5234"
-          aria-describedby={fieldErrors.longitude ? 'vn-lng-error' : undefined}
+          aria-describedby={describedBy('vn-lng', fieldErrors.longitude)}
           value={longitude}
           onChange={(e) => setLongitude(e.target.value)}
           className="mt-1 w-full"
         />
-        {err('longitude')}
-      </div>
+      </Field>
       <fieldset className="rounded-xl border border-line p-3 sm:col-span-2">
         <legend className="px-1 text-sm font-medium">Контакти</legend>
         <div className="grid gap-2 sm:grid-cols-2">
@@ -255,69 +159,50 @@ export function VenueCreateForm() {
           ),
         )}
       </fieldset>
-      <div className="text-sm">
-        <label htmlFor="vn-check">Середній чек (₴)</label>
+      <Field id="vn-check" label="Середній чек (₴)" error={fieldErrors.averageCheck}>
         <Input
           id="vn-check"
           type="number"
           min="0"
-          aria-describedby={fieldErrors.averageCheck ? 'vn-check-error' : undefined}
+          aria-describedby={describedBy('vn-check', fieldErrors.averageCheck)}
           value={averageCheck}
           onChange={(e) => setAverageCheck(e.target.value)}
           className="mt-1 w-full"
         />
-        {fieldErrors.averageCheck && (
-          <span id="vn-check-error" role="alert" className="mt-1 block text-danger">{fieldErrors.averageCheck}</span>
-        )}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="vn-features">Фічі (через кому, до 20)</label>
+      </Field>
+      <Field id="vn-features" label="Фічі (через кому, до 20)" error={fieldErrors.featureCodes}>
         <Input
           id="vn-features"
           value={featureCodes}
           onChange={(e) => setFeatureCodes(e.target.value)}
           className="mt-1 w-full"
         />
-        {err('featureCodes')}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="vn-tags">Теги (через кому, до 20)</label>
+      </Field>
+      <Field id="vn-tags" label="Теги (через кому, до 20)" error={fieldErrors.tagSlugs}>
         <Input
           id="vn-tags"
           value={tagSlugs}
           onChange={(e) => setTagSlugs(e.target.value)}
           className="mt-1 w-full"
         />
-        {err('tagSlugs')}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="vn-type">Тип (slug)</label>
+      </Field>
+      <Field id="vn-type" label="Тип (slug)" error={fieldErrors.typeSlug}>
         <Input
           id="vn-type"
           value={typeSlug}
           onChange={(e) => setTypeSlug(e.target.value)}
           className="mt-1 w-full"
         />
-        {err('typeSlug')}
-      </div>
+      </Field>
       <div className="text-sm sm:col-span-2">
-        <label>Фото закладу (до 4)</label>
+        <label>Фото закладу (до {MAX_PHOTOS})</label>
         <FilePickerButton
           buttonLabel="Обрати фото"
           inputLabel="Фото закладу"
           accept="image/jpeg,image/png,image/webp"
           multiple
           className="mt-1"
-          onFiles={(picked) => {
-            setPhotos((prev) => {
-              // дублікат (та сам файл двічі) — ігноруємо; спільний ліміт 4
-              const merged = [
-                ...prev,
-                ...picked.filter((p) => !prev.some((q) => q.name === p.name && q.size === p.size)),
-              ]
-              return merged.slice(0, MAX_PHOTOS)
-            })
-          }}
+          onFiles={addPhotos}
         />
         {photos.length > 0 && (
           <ul className="mt-2 space-y-1">
@@ -328,7 +213,7 @@ export function VenueCreateForm() {
                   type="button"
                   aria-label={`Прибрати ${f.name}`}
                   className="shrink-0 rounded px-1 text-danger hover:underline"
-                  onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
+                  onClick={() => removePhoto(i)}
                 >
                   ✕
                 </button>
