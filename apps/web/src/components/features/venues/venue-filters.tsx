@@ -1,115 +1,88 @@
 'use client'
 
-// Фільтри каталогу: стан локальний, застосування — через URL (щоб SSR бачив усе).
-// Компонування — «панель фільтрів» (варіант 2 з макетів): вузька колонка ліворуч
+// Розмітка фільтрів каталогу; стан і логіка — в useVenueFilters
+// (use-venue-filters.ts): стан локальний, застосування — через URL (щоб SSR
+// бачив усе). Компонування — «панель фільтрів»: вузька колонка ліворуч
 // від результатів (розкладку робить page.tsx); на мобільних (<sm) панель стає
 // горизонтальною стрічкою фільтрів над сіткою. Пошук — у хедері (sm+); тут він
 // лишений тільки для мобільних, бо хедерний інпут схований до sm.
 
-import { useEffect, useState, type FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import type { CatalogQuery } from '@/lib/venues/query'
-import { getVenueTags, getVenueTypes, getVenueFeatures, type TagRef, type TypeRef, type FeatureRef } from '@/services/venues'
+import { RATING_STARS, csvIncludes, useVenueFilters } from './use-venue-filters'
 
-// Рейтинг-фільтр зірками: цілі значення 1..5 (у URL досі можна 0.5-крок)
-const RATING_STARS = [1, 2, 3, 4, 5] as const
+// Чип-фільтр: теги і фічі рендеряться однаково (rounded-full, aria-pressed,
+// активний — бурштиновий), відрізняються лише значеннями у CSV-стані
+function FilterChips({ ariaLabel, chips, isActive, onToggle }: {
+  ariaLabel: string
+  chips: { key: string; value: string; text: string }[]
+  isActive: (value: string) => boolean
+  onToggle: (value: string) => void
+}) {
+  return (
+    <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label={ariaLabel}>
+      {chips.map((c) => {
+        const active = isActive(c.value)
+        return (
+          <button
+            key={c.key}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onToggle(c.value)}
+            className={`rounded-full border px-2 py-0.5 text-xs leading-none transition-colors focus:outline-none focus-visible:border-amber-500 ${
+              active ? 'border-amber-500 text-amber-400' : 'border-line text-muted hover:text-amber-400'
+            }`}
+          >
+            {c.text}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
-// Довідник тегів GET /venues/tags — публічний; чип-клік перемикає slug у CSV
+// Рейтинг-фільтр зірками; onToggle — повторний клік по активній скидає
+function RatingStars({ minRating, onToggle }: {
+  minRating: string
+  onToggle: (n: number) => void
+}) {
+  return (
+    <div role="group" aria-label="Рейтинг від" className="mt-1 flex items-center gap-1">
+      {RATING_STARS.map((n) => {
+        const on = minRating !== '' && Number(minRating) >= n
+        return (
+          <button
+            key={n}
+            type="button"
+            aria-pressed={minRating === String(n)}
+            aria-label={`Рейтинг від ${n}`}
+            onClick={() => onToggle(n)}
+            className={`rounded-xl border px-2 py-1 text-sm leading-none transition-colors focus:outline-none focus-visible:border-amber-500 ${
+              on ? 'border-amber-500 text-amber-400' : 'border-line text-faint hover:text-amber-400'
+            }`}
+          >
+            ★
+          </button>
+        )
+      })}
+      <span className="ml-1.5 text-xs text-faint">
+        {minRating ? `від ${minRating.replace('.', ',')}` : 'будь-який'}
+      </span>
+    </div>
+  )
+}
 
 export function VenueFilters({ initial }: { initial: CatalogQuery }) {
-  const router = useRouter()
-  const [q, setQ] = useState(initial.q ?? '')
-  const [sort, setSort] = useState(initial.sort)
-  const [type, setType] = useState(initial.type ?? '')
-  const [tag, setTag] = useState(initial.tag.join(','))
-  const [tags, setTags] = useState<TagRef[]>([])
-  const [types, setTypes] = useState<TypeRef[]>([])
-  const [features, setFeatures] = useState<FeatureRef[]>([])
-  const [feature, setFeature] = useState(initial.feature.join(','))
-  const [minCheck, setMinCheck] = useState(initial.minCheck?.toString() ?? '')
-  const [maxCheck, setMaxCheck] = useState(initial.maxCheck?.toString() ?? '')
-  const [minRating, setMinRating] = useState(initial.minRating?.toString() ?? '')
-  const [radiusKm, setRadiusKm] = useState(initial.radiusKm?.toString() ?? '')
-  const [geo, setGeo] = useState<{ lat: number; lng: number } | null>(
-    initial.lat !== undefined && initial.lng !== undefined ? { lat: initial.lat, lng: initial.lng } : null,
-  )
-  const [geoError, setGeoError] = useState<string | null>(null)
-
-  // Довідник тегів для чипів (публічний ендпоінт, без авторизації).
-  // Один AbortController на всі три: cleanup (розмонтування) скасовує запити,
-  // guard не пропускає пізній setState, якщо відповідь встигла до abort.
-  useEffect(() => {
-    const ac = new AbortController()
-    getVenueTags(ac.signal)
-      .then((value) => { if (!ac.signal.aborted) setTags(value) })
-      .catch(() => undefined)
-    getVenueTypes(ac.signal)
-      .then((value) => { if (!ac.signal.aborted) setTypes(value) })
-      .catch(() => undefined)
-    getVenueFeatures(ac.signal)
-      .then((value) => { if (!ac.signal.aborted) setFeatures(value) })
-      .catch(() => undefined)
-    return () => ac.abort()
-  }, [])
-
-  // Перемикання чипа: додає/забирає slug у CSV-стані тегів
-  function toggleTagSlug(slug: string) {
-    const active = tag.split(',').map((s) => s.trim()).filter(Boolean)
-    const next = active.includes(slug)
-      ? active.filter((s) => s !== slug)
-      : [...active, slug]
-    setTag(next.join(','))
-  }
-
-  // Перемикання чипа фічі: керує CSV-станом feature
-  function toggleFeatureSlug(code: string) {
-    const active = feature.split(',').map((s) => s.trim()).filter(Boolean)
-    const next = active.includes(code)
-      ? active.filter((s) => s !== code)
-      : [...active, code]
-    setFeature(next.join(','))
-  }
-
-  function apply(e: FormEvent) {
-    e.preventDefault()
-    const p = new URLSearchParams()
-    if (q) p.set('q', q)
-    // CSV уніфікуємо: трим + прибираємо порожні → URL без «%20», бекнд не втрачає слаги
-    if (tag) {
-      const clean = tag.split(',').map((s) => s.trim()).filter(Boolean).join(',')
-      if (clean) p.set('tag', clean)
-    }
-    if (sort !== 'newest') p.set('sort', sort)
-    if (type) p.set('type', type)
-    if (feature) {
-      const clean = feature.split(',').map((s) => s.trim()).filter(Boolean).join(',')
-      if (clean) p.set('feature', clean)
-    }
-    if (minCheck) p.set('minCheck', minCheck)
-    if (maxCheck) p.set('maxCheck', maxCheck)
-    if (minRating) p.set('minRating', minRating)
-    if (geo) {
-      p.set('lat', String(geo.lat))
-      p.set('lng', String(geo.lng))
-      // Порожній радіус — без урізання діапазону: бекенд просто сортує за відстанню
-      if (radiusKm) p.set('radiusKm', radiusKm)
-    }
-    router.push(`/?${p.toString()}`)
-  }
-
-  function nearMe() {
-    if (!navigator.geolocation) return setGeoError('Геолокація недоступна у вашому браузері')
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude })
-        setGeoError(null)
-      },
-      () => setGeoError('Не вдалося отримати геолокацію — перевірте дозвіл браузера'),
-    )
-  }
+  const {
+    q, setQ, sort, setSort, type, setType,
+    tag, toggleTag, feature, setFeature, toggleFeature,
+    tags, types, features,
+    minCheck, setMinCheck, maxCheck, setMaxCheck,
+    minRating, toggleMinRating, radiusKm, setRadiusKm,
+    geo, geoError, apply, reset, nearMe,
+  } = useVenueFilters(initial)
 
   return (
     <form
@@ -152,24 +125,12 @@ export function VenueFilters({ initial }: { initial: CatalogQuery }) {
         <div className="w-44 shrink-0 text-sm lg:w-auto">
           <span>Теги</span>
           {tags.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label="Теги">
-              {tags.map((t) => {
-                const active = tag.split(',').map((s) => s.trim()).includes(t.slug)
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => toggleTagSlug(t.slug)}
-                    className={`rounded-full border px-2 py-0.5 text-xs leading-none transition-colors focus:outline-none focus-visible:border-amber-500 ${
-                      active ? 'border-amber-500 text-amber-400' : 'border-line text-muted hover:text-amber-400'
-                    }`}
-                  >
-                    #{t.name}
-                  </button>
-                )
-              })}
-            </div>
+            <FilterChips
+              ariaLabel="Теги"
+              chips={tags.map((t) => ({ key: t.id, value: t.slug, text: `#${t.name}` }))}
+              isActive={(v) => csvIncludes(tag, v)}
+              onToggle={toggleTag}
+            />
           )}
         </div>
         <div className="w-44 shrink-0 text-sm lg:w-auto">
@@ -183,24 +144,12 @@ export function VenueFilters({ initial }: { initial: CatalogQuery }) {
             />
           )}
           {features.length > 0 && (
-            <div className="mt-1 flex flex-wrap gap-1" role="group" aria-label="Особливості">
-              {features.map((f) => {
-                const active = feature.split(',').map((s) => s.trim()).includes(f.code)
-                return (
-                  <button
-                    key={f.id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => toggleFeatureSlug(f.code)}
-                    className={`rounded-full border px-2 py-0.5 text-xs leading-none transition-colors focus:outline-none focus-visible:border-amber-500 ${
-                      active ? 'border-amber-500 text-amber-400' : 'border-line text-muted hover:text-amber-400'
-                    }`}
-                  >
-                    {f.icon ? `${f.icon} ${f.name}` : f.name}
-                  </button>
-                )
-              })}
-            </div>
+            <FilterChips
+              ariaLabel="Особливості"
+              chips={features.map((f) => ({ key: f.id, value: f.code, text: f.icon ? `${f.icon} ${f.name}` : f.name }))}
+              isActive={(v) => csvIncludes(feature, v)}
+              onToggle={toggleFeature}
+            />
           )}
         </div>
         <label className="w-28 shrink-0 text-sm lg:w-auto">
@@ -211,31 +160,9 @@ export function VenueFilters({ initial }: { initial: CatalogQuery }) {
           Чек до
           <Input type="number" min="0" value={maxCheck} onChange={(e) => setMaxCheck(e.target.value)} className="mt-1" />
         </label>
-        {/* Рейтинг — фільтр зірками: повторний клік по активній зірці скидає */}
         <div className="w-44 shrink-0 lg:w-auto">
           <span className="text-sm">Рейтинг</span>
-          <div role="group" aria-label="Рейтинг від" className="mt-1 flex items-center gap-1">
-            {RATING_STARS.map((n) => {
-              const on = minRating !== '' && Number(minRating) >= n
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  aria-pressed={minRating === String(n)}
-                  aria-label={`Рейтинг від ${n}`}
-                  onClick={() => setMinRating(minRating === String(n) ? '' : String(n))}
-                  className={`rounded-xl border px-2 py-1 text-sm leading-none transition-colors focus:outline-none focus-visible:border-amber-500 ${
-                    on ? 'border-amber-500 text-amber-400' : 'border-line text-faint hover:text-amber-400'
-                  }`}
-                >
-                  ★
-                </button>
-              )
-            })}
-            <span className="ml-1.5 text-xs text-faint">
-              {minRating ? `від ${minRating.replace('.', ',')}` : 'будь-який'}
-            </span>
-          </div>
+          <RatingStars minRating={minRating} onToggle={toggleMinRating} />
         </div>
         <div className="w-28 shrink-0 lg:w-auto">
           <label className="text-sm">
@@ -247,7 +174,7 @@ export function VenueFilters({ initial }: { initial: CatalogQuery }) {
         <div className="flex shrink-0 gap-2 lg:w-auto lg:flex-col">
           <Button type="submit">Застосувати</Button>
           <Button type="button" variant="secondary" onClick={nearMe}>📍 Поблизу</Button>
-          <Button type="button" variant="ghost" onClick={() => router.push('/')}>Скинути</Button>
+          <Button type="button" variant="ghost" onClick={reset}>Скинути</Button>
         </div>
       </div>
       {geoError && <p role="alert" className="mt-2 text-sm text-danger">{geoError}</p>}
