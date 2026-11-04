@@ -36,11 +36,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       if (typeof resp === 'string') {
         message = resp;
       } else if (typeof resp === 'object' && resp !== null) {
-        const r = resp as { message?: string | string[]; error?: string };
+        const r = resp as { message?: string | string[] };
         message = Array.isArray(r.message)
           ? r.message.join('; ')
           : (r.message ?? message);
-        code = r.error ?? this.codeFromStatus(status);
       }
       code = this.codeFromStatus(status);
     } else if (exception instanceof Error) {
