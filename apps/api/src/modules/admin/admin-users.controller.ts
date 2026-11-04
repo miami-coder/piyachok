@@ -20,6 +20,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -74,7 +75,7 @@ export class AdminUsersController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу user:manage' })
   @ApiNotFoundResponse({ description: 'Користувача не знайдено' })
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUuidPipe) id: string) {
     return this.adminUsers.get(id);
   }
 
@@ -87,7 +88,7 @@ export class AdminUsersController {
   @ApiNotFoundResponse({ description: 'Профіль не знайдено' })
   updateProfile(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() dto: UpdateProfileDto,
   ) {
     return this.adminUsers.updateProfile(id, dto, u.sub);
@@ -102,7 +103,7 @@ export class AdminUsersController {
     description: 'Немає дозволу / не можна видалити себе',
   })
   @ApiNotFoundResponse({ description: 'Користувача не знайдено' })
-  softDelete(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  softDelete(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.adminUsers.softDelete(u.sub, id);
   }
 
@@ -130,7 +131,7 @@ export class AdminUsersController {
   @ApiNotFoundResponse({ description: 'Роль не знайдено' })
   assignRole(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() dto: AssignRoleDto,
   ) {
     return this.adminUsers.assignRole(u.sub, id, dto.roleCode, dto.action);

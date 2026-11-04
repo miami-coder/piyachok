@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -72,7 +73,7 @@ export class TopController {
   @Permissions('user:manage')
   @Patch('admin/top/categories/:id')
   @ApiOperation({ summary: 'Адмін: оновити категорію Топу' })
-  updateCategory(@Param('id') id: string, @Body() dto: UpdateTopCategoryDto) {
+  updateCategory(@Param('id', ParseUuidPipe) id: string, @Body() dto: UpdateTopCategoryDto) {
     return this.top.updateCategory(id, dto).then((data) => ({ data }));
   }
 
@@ -81,7 +82,7 @@ export class TopController {
   @Permissions('user:manage')
   @Delete('admin/top/categories/:id')
   @ApiOperation({ summary: 'Адмін: видалити категорію Топу (з записами)' })
-  async deleteCategory(@Param('id') id: string) {
+  async deleteCategory(@Param('id', ParseUuidPipe) id: string) {
     await this.top.deleteCategory(id);
     return { data: { id } };
   }
@@ -91,7 +92,7 @@ export class TopController {
   @Permissions('user:manage')
   @Post('admin/top/categories/:id/entries')
   @ApiOperation({ summary: 'Адмін: додати заклад у категорію Топу' })
-  addEntry(@Param('id') id: string, @Body() dto: CreateTopEntryDto) {
+  addEntry(@Param('id', ParseUuidPipe) id: string, @Body() dto: CreateTopEntryDto) {
     return this.top.addEntry(id, dto).then((data) => ({ data }));
   }
 
@@ -103,7 +104,7 @@ export class TopController {
     summary: 'Адмін: новий порядок записів категорії (полний список айді)',
   })
   reorderEntries(
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() dto: ReorderTopEntriesDto,
   ) {
     return this.top.reorderEntries(id, dto.entryIds).then(() => ({
@@ -117,8 +118,8 @@ export class TopController {
   @Delete('admin/top/categories/:id/entries/:entryId')
   @ApiOperation({ summary: 'Адмін: прибрати заклад з категорії Топу' })
   async removeEntry(
-    @Param('id') id: string,
-    @Param('entryId') entryId: string,
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('entryId', ParseUuidPipe) entryId: string,
   ) {
     await this.top.removeEntry(id, entryId);
     return { data: { entryId } };

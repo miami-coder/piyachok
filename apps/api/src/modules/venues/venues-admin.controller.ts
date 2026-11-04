@@ -18,6 +18,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -100,7 +101,7 @@ export class VenuesAdminController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу venue:moderate' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  approve(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  approve(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.venues.approve(u.sub, id).then((v) => ({ data: v }));
   }
 
@@ -111,7 +112,7 @@ export class VenuesAdminController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу venue:moderate' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  reject(@Param('id') id: string, @Body() _dto: ChangeStatusDto) {
+  reject(@Param('id', ParseUuidPipe) id: string, @Body() _dto: ChangeStatusDto) {
     return this.venues
       .changeStatus(id, VenueStatus.Rejected)
       .then((v) => ({ data: v }));
@@ -134,7 +135,7 @@ export class VenuesAdminController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу user:manage' })
   @ApiNotFoundResponse({ description: 'Заклад або користувач не знайдено' })
-  async assignOwner(@Param('id') id: string, @Body('userId') userId: string) {
+  async assignOwner(@Param('id', ParseUuidPipe) id: string, @Body('userId') userId: string) {
     await this.users.findById(userId); // кинуть NotFound, якщо користувача немає
     return { data: await this.venues.assignOwner(id, userId) };
   }

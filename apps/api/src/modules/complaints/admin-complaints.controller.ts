@@ -18,6 +18,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -74,7 +75,7 @@ export class AdminComplaintsController {
   })
   resolve(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() dto: ResolveComplaintDto,
   ) {
     return this.complaints.resolve(id, u.sub, dto).then((data) => ({ data }));

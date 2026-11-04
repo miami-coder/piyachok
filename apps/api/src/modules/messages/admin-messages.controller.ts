@@ -10,6 +10,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -50,7 +51,7 @@ export class AdminMessagesController {
   @ApiNotFoundResponse({ description: 'Повідомлення не знайдено' })
   replyToFeedback(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() dto: SendMessageDto,
   ) {
     return this.messages.replyToFeedback(u.sub, id, dto).then((data) => ({
@@ -65,7 +66,7 @@ export class AdminMessagesController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу user:manage' })
   @ApiNotFoundResponse({ description: 'Користувача не знайдено' })
-  sendSystem(@Param('id') userId: string, @Body() dto: SendMessageDto) {
+  sendSystem(@Param('id', ParseUuidPipe) userId: string, @Body() dto: SendMessageDto) {
     return this.messages.sendSystem(userId, dto).then((data) => ({ data }));
   }
 }

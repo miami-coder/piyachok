@@ -30,6 +30,7 @@ import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { Review } from './entities/review.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Public } from '../../common/decorators/public.decorator';
@@ -75,7 +76,7 @@ export class ReviewsController {
   @ApiBadRequestResponse({ description: 'Невалідні дані / дублікат відгуку' })
   async create(
     @CurrentUser() u: JwtUser,
-    @Param('venueId') venueId: string,
+    @Param('venueId', ParseUuidPipe) venueId: string,
     @Body() dto: CreateReviewDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
@@ -122,7 +123,7 @@ export class ReviewsController {
     description: 'Сортування',
   })
   list(
-    @Param('venueId') venueId: string,
+    @Param('venueId', ParseUuidPipe) venueId: string,
     @Query('page') page: number,
     @Query('limit') limit: number,
     @Query('sort') sort?: 'newest' | 'oldest' | 'highest' | 'lowest',
@@ -135,7 +136,7 @@ export class ReviewsController {
   @ApiOperation({ summary: 'Переглянути відгук' })
   @ApiDataResponse({ type: Review, description: 'Деталі відгуку' })
   @ApiNotFoundResponse({ description: 'Відгук не знайдено' })
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUuidPipe) id: string) {
     return this.reviews.findOneOrThrow(id).then((data) => ({ data }));
   }
 
@@ -151,7 +152,7 @@ export class ReviewsController {
   @ApiBadRequestResponse({ description: 'Невалідні дані' })
   update(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() dto: UpdateReviewDto,
   ) {
     return this.reviews.update(u.sub, id, dto).then((data) => ({ data }));
@@ -166,7 +167,7 @@ export class ReviewsController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає права видалити цей відгук' })
   @ApiNotFoundResponse({ description: 'Відгук не знайдено' })
-  remove(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  remove(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.reviews.softDelete(u.sub, id);
   }
 
@@ -179,7 +180,7 @@ export class ReviewsController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу review:feature' })
   @ApiNotFoundResponse({ description: 'Відгук не знайдено' })
-  feature(@Param('id') id: string) {
+  feature(@Param('id', ParseUuidPipe) id: string) {
     return this.reviews.feature(id).then((data) => ({ data }));
   }
 
@@ -192,7 +193,7 @@ export class ReviewsController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу review:feature' })
   @ApiNotFoundResponse({ description: 'Відгук не знайдено' })
-  unfeature(@Param('id') id: string) {
+  unfeature(@Param('id', ParseUuidPipe) id: string) {
     return this.reviews.unfeature(id).then((data) => ({ data }));
   }
 

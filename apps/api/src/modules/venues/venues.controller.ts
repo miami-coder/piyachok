@@ -26,6 +26,7 @@ import {
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Public } from '../../common/decorators/public.decorator';
@@ -102,7 +103,7 @@ export class VenuesController {
   @ApiOperation({ summary: 'Публічні деталі закладу' })
   @ApiDataResponse({ type: Venue, description: 'Деталі закладу' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUuidPipe) id: string) {
     return this.venues.findOnePublic(id).then((v) => ({ data: v }));
   }
 
@@ -119,7 +120,7 @@ export class VenuesController {
     description: 'Немає дозволу venue:recommend / несхвалений заклад',
   })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  recommend(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  recommend(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.venues.recommend(u.sub, id).then((v) => ({ data: v }));
   }
 
@@ -135,7 +136,7 @@ export class VenuesController {
       'Немає дозволу venue:recommend / чужа рекомендація (знімає лише автор)',
   })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  unrecommend(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  unrecommend(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.venues.unrecommend(u.sub, id).then((v) => ({ data: v }));
   }
 
@@ -168,7 +169,7 @@ export class VenuesController {
   @ApiBadRequestResponse({ description: 'Невалідні дані' })
   update(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() dto: UpdateVenueDto,
   ) {
     return this.venues.update(u.sub, id, dto).then((v) => ({ data: v }));
@@ -184,7 +185,7 @@ export class VenuesController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає права редагувати цей заклад' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  remove(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  remove(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.venues.softDelete(u.sub, id);
   }
 
@@ -216,7 +217,7 @@ export class VenuesController {
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   async uploadPhoto(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
     return { data: await this.venues.uploadPhoto(u.sub, id, file) };

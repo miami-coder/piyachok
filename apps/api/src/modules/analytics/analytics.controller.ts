@@ -23,6 +23,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -72,7 +73,7 @@ export class AnalyticsController {
   })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   recordView(
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() dto: RecordViewDto,
     @Req() req: Request,
   ) {
@@ -135,7 +136,7 @@ export class AnalyticsController {
   })
   getForVenue(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
   ) {

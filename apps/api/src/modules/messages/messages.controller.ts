@@ -20,6 +20,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { MessagesService } from './messages.service';
@@ -49,7 +50,7 @@ export class MessagesController {
   @ApiBadRequestResponse({ description: 'Невалідні дані' })
   sendToVenueManager(
     @CurrentUser() u: JwtUser,
-    @Param('id') venueId: string,
+    @Param('id', ParseUuidPipe) venueId: string,
     @Body() dto: SendMessageDto,
   ) {
     return this.messages.sendToVenueManager(u.sub, venueId, dto).then((data) => ({
@@ -99,7 +100,7 @@ export class MessagesController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Це не ваше повідомлення' })
   @ApiNotFoundResponse({ description: 'Повідомлення не знайдено' })
-  markRead(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  markRead(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.messages.markRead(u.sub, id).then((data) => ({ data }));
   }
 
@@ -112,7 +113,7 @@ export class MessagesController {
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   venueInbox(
     @CurrentUser() u: JwtUser,
-    @Param('id') venueId: string,
+    @Param('id', ParseUuidPipe) venueId: string,
     @Query() q: { page?: number; limit?: number },
   ) {
     return this.messages.listVenueInbox(u.sub, venueId, q);
@@ -126,8 +127,8 @@ export class MessagesController {
   @ApiBadRequestResponse({ description: 'Невалідні дані' })
   replyToVenueMessage(
     @CurrentUser() u: JwtUser,
-    @Param('id') venueId: string,
-    @Param('messageId') messageId: string,
+    @Param('id', ParseUuidPipe) venueId: string,
+    @Param('messageId', ParseUuidPipe) messageId: string,
     @Body() dto: SendMessageDto,
   ) {
     return this.messages

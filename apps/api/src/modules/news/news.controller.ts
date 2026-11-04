@@ -26,6 +26,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Public } from '../../common/decorators/public.decorator';
@@ -102,7 +103,7 @@ export class NewsController {
   @ApiOperation({ summary: 'Переглянути новину' })
   @ApiDataResponse({ type: News, description: 'Деталі новини' })
   @ApiNotFoundResponse({ description: 'Новину не знайдено' })
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUuidPipe) id: string) {
     return this.news.getPublic(id).then((data) => ({ data }));
   }
 
@@ -134,7 +135,7 @@ export class NewsController {
   @ApiBadRequestResponse({ description: 'Невалідні дані' })
   createForVenue(
     @CurrentUser() u: JwtUser,
-    @Param('venueId') venueId: string,
+    @Param('venueId', ParseUuidPipe) venueId: string,
     @Body() dto: CreateNewsDto,
   ) {
     return this.news.createForVenue(u.sub, venueId, dto).then((data) => ({
@@ -154,7 +155,7 @@ export class NewsController {
   @ApiBadRequestResponse({ description: 'Невалідні дані' })
   update(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() dto: Partial<CreateNewsDto>,
   ) {
     return this.news.update(id, u.sub, dto).then((data) => ({ data }));
@@ -169,7 +170,7 @@ export class NewsController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу news:manage' })
   @ApiNotFoundResponse({ description: 'Новину не знайдено' })
-  remove(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  remove(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.news.softDelete(id, u.sub).then((data) => ({ data }));
   }
 
@@ -201,7 +202,7 @@ export class NewsController {
   @ApiNotFoundResponse({ description: 'Новину не знайдено' })
   async uploadPhoto(
     @CurrentUser() u: JwtUser,
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
     return { data: await this.news.uploadPhoto(id, u.sub, file) };

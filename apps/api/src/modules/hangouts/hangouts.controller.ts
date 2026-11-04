@@ -23,6 +23,7 @@ import {
   getSchemaPath,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
@@ -111,7 +112,7 @@ export class HangoutsController {
   })
   create(
     @CurrentUser() u: JwtUser,
-    @Param('venueId') venueId: string,
+    @Param('venueId', ParseUuidPipe) venueId: string,
     @Body() dto: CreateHangoutDto,
   ) {
     return this.hangouts.create(u.sub, venueId, dto).then((data) => ({ data }));
@@ -126,7 +127,7 @@ export class HangoutsController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiNotFoundResponse({ description: 'Зустріч не знайдено' })
   @ApiConflictResponse({ description: 'Заявка заповнена / вже приєднані' })
-  join(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  join(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.hangouts.join(u.sub, id).then((data) => ({ data }));
   }
 
@@ -140,7 +141,7 @@ export class HangoutsController {
   @ApiForbiddenResponse({
     description: 'Творець не може залишити, поки є інші учасники',
   })
-  leave(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  leave(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.hangouts.leave(u.sub, id).then(() => ({ data: { id } }));
   }
 
@@ -152,7 +153,7 @@ export class HangoutsController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Тільки творець може скасувати' })
   @ApiNotFoundResponse({ description: 'Зустріч не знайдено' })
-  cancel(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  cancel(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.hangouts.cancel(u.sub, id).then((data) => ({ data }));
   }
 
@@ -164,7 +165,7 @@ export class HangoutsController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Тільки творець може видалити' })
   @ApiNotFoundResponse({ description: 'Зустріч не знайдено' })
-  remove(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  remove(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.hangouts.delete(u.sub, id).then(() => ({ data: { id } }));
   }
 
@@ -205,7 +206,7 @@ export class HangoutsController {
   })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiNotFoundResponse({ description: 'Зустріч не знайдено' })
-  get(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  get(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.hangouts.getOne(id).then((data) => ({ data }));
   }
 

@@ -17,6 +17,7 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { FavoritesService } from './favorites.service';
@@ -46,7 +47,7 @@ export class FavoritesController {
   })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  async add(@CurrentUser() u: JwtUser, @Param('venueId') id: string) {
+  async add(@CurrentUser() u: JwtUser, @Param('venueId', ParseUuidPipe) id: string) {
     await this.favorites.add(u.sub, id);
     return { data: { venueId: id } };
   }
@@ -66,7 +67,7 @@ export class FavoritesController {
     },
   })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
-  async remove(@CurrentUser() u: JwtUser, @Param('venueId') id: string) {
+  async remove(@CurrentUser() u: JwtUser, @Param('venueId', ParseUuidPipe) id: string) {
     await this.favorites.remove(u.sub, id);
     return { data: { venueId: id } };
   }

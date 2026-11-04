@@ -14,6 +14,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { PermissionsService } from '../rbac/permissions.service';
@@ -63,7 +64,7 @@ export class MeVenuesController {
   @ApiDataResponse({ type: Venue, description: 'Заклад з relations' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   @ApiForbiddenResponse({ description: 'Немає доступу до цього закладу' })
-  async get(@CurrentUser() u: JwtUser, @Param('id') id: string) {
+  async get(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     const venue = await this.venues.findOneForOwnerQuery(id);
     if (!venue) throw new NotFoundException('Заклад не знайдено');
     if (venue.ownerId !== u.sub) {
