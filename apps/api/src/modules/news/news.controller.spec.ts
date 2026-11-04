@@ -49,7 +49,7 @@ describe('NewsController', () => {
 
   it('list leaves isPromoted undefined when not "true"', async () => {
     news.listPublic.mockResolvedValue({ data: [], meta: { total: 0 } });
-    await controller.list({ isPromoted: 'false' });
+    await controller.list({} as any);
     expect(news.listPublic).toHaveBeenCalledWith({ isPromoted: undefined });
   });
 

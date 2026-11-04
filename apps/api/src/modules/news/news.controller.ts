@@ -21,10 +21,10 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -34,6 +34,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { NewsService } from './news.service';
 import { CreateNewsDto } from './dto/create-news.dto';
+import { NewsListQueryDto } from './dto/query-news.dto';
 import { News } from './entities/news.entity';
 import {
   ApiDataResponse,
@@ -52,46 +53,7 @@ export class NewsController {
     type: News,
     description: 'Сторінкований список новин',
   })
-  @ApiQuery({
-    name: 'category',
-    required: false,
-    type: String,
-    description: 'Фільтр за категорією',
-  })
-  @ApiQuery({
-    name: 'venueId',
-    required: false,
-    type: String,
-    description: 'Фільтр за закладом',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Номер сторінки',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Розмір сторінки',
-  })
-  @ApiQuery({
-    name: 'isPromoted',
-    required: false,
-    type: String,
-    description: "'true' — лише промотовані",
-  })
-  list(
-    @Query()
-    q: {
-      category?: string;
-      venueId?: string;
-      page?: number;
-      limit?: number;
-      isPromoted?: string;
-    },
-  ) {
+  list(@Query() q: NewsListQueryDto) {
     return this.news.listPublic({
       ...q,
       isPromoted: q.isPromoted === 'true' ? true : undefined,
@@ -113,13 +75,9 @@ export class NewsController {
   @ApiOperation({
     summary: 'Новини закладів поточного власника (будь-який статус закладу)',
   })
-  mine(
-    @CurrentUser() u: JwtUser,
-    @Query('page') page: number,
-    @Query('limit') limit: number,
-  ) {
+  mine(@CurrentUser() u: JwtUser, @Query() q: PaginationQueryDto) {
     return this.news
-      .listMine(u.sub, page, limit)
+      .listMine(u.sub, q.page, q.limit)
       .then(({ data, meta }) => ({ data, meta }));
   }
 

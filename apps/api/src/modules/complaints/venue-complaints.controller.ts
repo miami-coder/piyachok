@@ -6,7 +6,8 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOperation, ApiQuery, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiForbiddenResponse, ApiNotFoundResponse, ApiOperation, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -41,23 +42,16 @@ export class VenueComplaintsController {
     type: Complaint,
     description: 'Сторінкований список скарг до закладу',
   })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає доступу до скарг цього закладу' })
   @ApiNotFoundResponse({ description: 'Закладу не знайдено' })
   list(
     @CurrentUser() u: JwtUser,
     @Param('id', ParseUuidPipe) id: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query() q: PaginationQueryDto,
   ) {
     return this.assertOwnerOrAll(u.sub, id).then(() =>
-      this.complaints.listForVenue(
-        id,
-        page ? Number(page) : 1,
-        limit ? Number(limit) : 20,
-      ),
+      this.complaints.listForVenue(id, q.page, q.limit),
     );
   }
 

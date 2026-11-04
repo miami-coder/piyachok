@@ -15,10 +15,10 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -70,12 +70,7 @@ export class MessagesController {
   @Get('me/messages')
   @ApiOperation({ summary: 'Вхідні повідомлення користувача' })
   @ApiPaginatedResponse({ type: Message, description: 'Вхідні повідомлення' })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
-  inbox(
-    @CurrentUser() u: JwtUser,
-    @Query() q: { page?: number; limit?: number },
-  ) {
+  inbox(@CurrentUser() u: JwtUser, @Query() q: PaginationQueryDto) {
     return this.messages.listInbox(u.sub, q);
   }
 
@@ -107,14 +102,12 @@ export class MessagesController {
   @Get('me/venues/:id/messages')
   @ApiOperation({ summary: 'Повідомлення користувачів про заклад (для власника)' })
   @ApiPaginatedResponse({ type: Message, description: 'Повідомлення про заклад' })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiForbiddenResponse({ description: 'Немає доступу до цього закладу' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   venueInbox(
     @CurrentUser() u: JwtUser,
     @Param('id', ParseUuidPipe) venueId: string,
-    @Query() q: { page?: number; limit?: number },
+    @Query() q: PaginationQueryDto,
   ) {
     return this.messages.listVenueInbox(u.sub, venueId, q);
   }

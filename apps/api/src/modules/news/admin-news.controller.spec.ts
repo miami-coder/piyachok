@@ -47,7 +47,7 @@ describe('AdminNewsController', () => {
 
   it('list leaves isPromoted undefined when not "true"', async () => {
     news.listAdmin.mockResolvedValue({ data: [], meta: { total: 0 } });
-    await controller.list({ isPromoted: 'false' });
+    await controller.list({} as any);
     expect(news.listAdmin).toHaveBeenCalledWith({
       isPromoted: undefined,
       status: undefined,
@@ -56,14 +56,8 @@ describe('AdminNewsController', () => {
 
   it('list передає валідний status як NewsStatus', async () => {
     news.listAdmin.mockResolvedValue({ data: [], meta: { total: 0 } });
-    await controller.list({ status: 'draft' });
+    await controller.list({ status: 'draft' as NewsStatus });
     expect(news.listAdmin).toHaveBeenCalledWith({ status: NewsStatus.Draft });
-  });
-
-  it('list відкидає невалідний status (undefined — усі статуси)', async () => {
-    news.listAdmin.mockResolvedValue({ data: [], meta: { total: 0 } });
-    await controller.list({ status: 'hacked' });
-    expect(news.listAdmin).toHaveBeenCalledWith({ status: undefined });
   });
 
   it('createGlobal wraps result in { data }', async () => {

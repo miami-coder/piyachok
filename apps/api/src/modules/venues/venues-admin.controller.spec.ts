@@ -37,13 +37,13 @@ describe('VenuesAdminController', () => {
 
   it('list delegates to findPending', async () => {
     venues.findPending.mockResolvedValue({ data: [], meta: { total: 0 } });
-    await controller.list(1, 20);
+    await controller.list({ page: 1, limit: 20 } as any);
     expect(venues.findPending).toHaveBeenCalledWith(1, 20);
   });
 
   it('listApproved delegates to findApproved', async () => {
     venues.findApproved.mockResolvedValue({ data: [], meta: { total: 0 } });
-    await controller.listApproved(1, 20);
+    await controller.listApproved({ page: 1, limit: 20 } as any);
     expect(venues.findApproved).toHaveBeenCalledWith(1, 20);
   });
 

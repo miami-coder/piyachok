@@ -87,7 +87,7 @@ describe('ReviewsController', () => {
 
   it('list delegates', async () => {
     reviews.listForVenue.mockResolvedValue({ data: [], meta: { total: 0 } });
-    await controller.list('v1', 1, 20);
+    await controller.list('v1', { page: 1, limit: 20 } as any);
     expect(reviews.listForVenue).toHaveBeenCalledWith('v1', 1, 20, undefined);
   });
 });

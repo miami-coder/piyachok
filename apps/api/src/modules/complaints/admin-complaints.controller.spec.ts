@@ -18,8 +18,9 @@ describe('AdminComplaintsController', () => {
 
   it('list delegates to listPending', async () => {
     complaints.listPending.mockResolvedValue({ data: [], meta: { total: 0 } });
-    const res = await controller.list(1, 20);
+    const res = await controller.list({ page: 1, limit: 20 } as any);
     expect(complaints.listPending).toHaveBeenCalledWith(1, 20);
+
     expect(res).toEqual({ data: [], meta: { total: 0 } });
   });
 

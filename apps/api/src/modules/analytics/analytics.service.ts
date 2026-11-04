@@ -154,7 +154,8 @@ export class AnalyticsService {
     to?: string;
     granularity: Granularity;
   }): Promise<{ date: string; count: number }[]> {
-    // granularity проходить whitelist-валідацію в контролері
+    // granularity проходить whitelist-валідацію DTO (@IsIn) на межі HTTP —
+    // сюди більше не може дійти довільна строка
     const qb = this.views
       .createQueryBuilder('v')
       .select(

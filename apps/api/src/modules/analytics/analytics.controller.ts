@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
@@ -11,13 +10,17 @@ import {
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
+  AnalyticsRangeQueryDto,
+  TimeseriesQueryDto,
+  VenueStatsQueryDto,
+} from './dto/query-analytics.dto';
+import {
   ApiBadRequestResponse,
   ApiBearerAuth,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -28,7 +31,7 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
-import { AnalyticsService, type Granularity } from './analytics.service';
+import { AnalyticsService } from './analytics.service';
 import { RecordViewDto } from './dto/record-view.dto';
 
 /**
@@ -115,26 +118,13 @@ export class AnalyticsController {
     description: 'Немає доступу до аналітики цього закладу',
   })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  @ApiQuery({
-    name: 'from',
-    required: false,
-    type: String,
-    description: 'Дата з (ISO)',
-  })
-  @ApiQuery({
-    name: 'to',
-    required: false,
-    type: String,
-    description: 'Дата по (ISO)',
-  })
   getForVenue(
     @CurrentUser() u: JwtUser,
     @Param('id', ParseUuidPipe) id: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
+    @Query() q: AnalyticsRangeQueryDto,
   ) {
     // Хто бачить аналітику (власник або супер-адмін) вирішує сам сервіс
-    return this.analytics.getForVenue(u.sub, id, from, to).then((data) => ({
+    return this.analytics.getForVenue(u.sub, id, q.from, q.to).then((data) => ({
       data,
     }));
   }
@@ -193,34 +183,15 @@ export class AnalyticsController {
       },
     },
   })
-  @ApiQuery({ name: 'from', required: false, type: String })
-  @ApiQuery({ name: 'to', required: false, type: String })
-  @ApiQuery({
-    name: 'granularity',
-    required: false,
-    enum: ['day', 'week', 'month'],
-  })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу analytics:view:all' })
   @ApiBadRequestResponse({ description: 'Невалідна гранулярність' })
-  getTimeseries(
-    @Query()
-    q: {
-      from?: string;
-      to?: string;
-      granularity?: string;
-    },
-  ) {
-    const granularity = (['day', 'week', 'month'] as const).find(
-      (g) => g === (q.granularity ?? 'day'),
-    );
-    if (!granularity)
-      throw new BadRequestException('Невалідна гранулярність: day|week|month');
+  getTimeseries(@Query() q: TimeseriesQueryDto) {
     return this.analytics
       .getTimeseries({
         from: q.from,
         to: q.to,
-        granularity: granularity as Granularity,
+        granularity: q.granularity ?? 'day',
       })
       .then((data) => ({ data }));
   }
@@ -250,21 +221,9 @@ export class AnalyticsController {
       },
     },
   })
-  @ApiQuery({ name: 'from', required: false, type: String })
-  @ApiQuery({ name: 'to', required: false, type: String })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу analytics:view:all' })
-  getVenueStats(
-    @Query()
-    q: {
-      from?: string;
-      to?: string;
-      page?: number;
-      limit?: number;
-    },
-  ) {
+  getVenueStats(@Query() q: VenueStatsQueryDto) {
     return this.analytics.getVenueStats(q);
   }
 }

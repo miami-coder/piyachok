@@ -12,10 +12,10 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -78,24 +78,8 @@ export class FavoritesController {
     type: FavoriteVenueDto,
     description: 'Сторінкований список обраних',
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Номер сторінки',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Розмір сторінки',
-  })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
-  list(
-    @CurrentUser() u: JwtUser,
-    @Query('page') page: number,
-    @Query('limit') limit: number,
-  ) {
-    return this.favorites.list(u.sub, page, limit);
+  list(@CurrentUser() u: JwtUser, @Query() q: PaginationQueryDto) {
+    return this.favorites.list(u.sub, q.page, q.limit);
   }
 }

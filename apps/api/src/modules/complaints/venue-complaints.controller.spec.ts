@@ -30,7 +30,7 @@ describe('VenueComplaintsController', () => {
     perms.hasPermission.mockResolvedValue(false);
     venues.findOneOrThrow.mockResolvedValue({ ownerId: 'u1' });
     complaints.listForVenue.mockResolvedValue({ data: [{ id: 'c1' }], meta: { total: 1 } });
-    const res = await controller.list({ sub: 'u1' } as any, 'v1', 1, 20);
+    const res = await controller.list({ sub: 'u1' } as any, 'v1', { page: 1, limit: 20 } as any);
     expect(venues.findOneOrThrow).toHaveBeenCalledWith('v1');
     expect(complaints.listForVenue).toHaveBeenCalledWith('v1', 1, 20);
     expect(res.data).toEqual([{ id: 'c1' }]);
@@ -38,16 +38,17 @@ describe('VenueComplaintsController', () => {
 
   it('супер-адмін (complaint:manage) бачить скарги без перевірки власності', async () => {
     perms.hasPermission.mockResolvedValue(true);
-    await controller.list({ sub: 'sa' } as any, 'v1', undefined, undefined);
+    await controller.list({ sub: 'sa' } as any, 'v1', {} as any);
     expect(venues.findOneOrThrow).not.toHaveBeenCalled();
-    expect(complaints.listForVenue).toHaveBeenCalledWith('v1', 1, 20);
+    // дефолти page/limit тепер у сервісі (page = 1, limit = 20)
+    expect(complaints.listForVenue).toHaveBeenCalledWith('v1', undefined, undefined);
   });
 
   it('не-власник отримує 403 і listForVenue не викликається', async () => {
     perms.hasPermission.mockResolvedValue(false);
     venues.findOneOrThrow.mockResolvedValue({ ownerId: 'other' });
     await expect(
-      controller.list({ sub: 'u1' } as any, 'v1', 1, 20),
+      controller.list({ sub: 'u1' } as any, 'v1', { page: 1, limit: 20 } as any),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(complaints.listForVenue).not.toHaveBeenCalled();
   });

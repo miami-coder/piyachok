@@ -32,7 +32,7 @@ describe('FavoritesController', () => {
   });
 
   it('list delegates to service with user, page, limit', async () => {
-    await controller.list({ sub: 'u1' } as any, 2, 10);
+    await controller.list({ sub: 'u1' } as any, { page: 2, limit: 10 } as any);
     expect(favorites.list).toHaveBeenCalledWith('u1', 2, 10);
   });
 });

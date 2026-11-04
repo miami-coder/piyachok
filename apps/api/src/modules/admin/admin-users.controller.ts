@@ -15,10 +15,10 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
@@ -50,22 +50,10 @@ export class AdminUsersController {
     type: User,
     description: 'Сторінкований список користувачів',
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Номер сторінки',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Розмір сторінки',
-  })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу user:manage' })
-  list(@Query('page') page: number, @Query('limit') limit: number) {
-    return this.adminUsers.list(page, limit);
+  list(@Query() q: PaginationQueryDto) {
+    return this.adminUsers.list(q.page, q.limit);
   }
 
   @Get(':id')

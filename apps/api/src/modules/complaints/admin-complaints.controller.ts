@@ -13,10 +13,10 @@ import {
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -45,22 +45,10 @@ export class AdminComplaintsController {
     type: Complaint,
     description: 'Сторінкований список скарг',
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Номер сторінки',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Розмір сторінки',
-  })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу complaint:manage' })
-  list(@Query('page') page: number, @Query('limit') limit: number) {
-    return this.complaints.listPending(page, limit);
+  list(@Query() q: PaginationQueryDto) {
+    return this.complaints.listPending(q.page, q.limit);
   }
 
   @Post(':id/resolve')

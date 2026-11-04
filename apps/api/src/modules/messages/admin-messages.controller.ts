@@ -5,10 +5,10 @@ import {
   ApiNotFoundResponse,
 
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { Permissions } from '../../common/decorators/permissions.decorator';
@@ -34,11 +34,9 @@ export class AdminMessagesController {
   @Permissions('user:manage')
   @ApiOperation({ summary: 'Скринька зворотного звʼязку «написати нам»' })
   @ApiPaginatedResponse({ type: Message, description: 'Повідомлення фідбеку' })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу user:manage' })
-  listFeedback(@Query() q: { page?: number; limit?: number }) {
+  listFeedback(@Query() q: PaginationQueryDto) {
     return this.messages.listFeedback(q);
   }
 

@@ -44,7 +44,7 @@ export class AdminUsersService {
     return { ...rest, roles: (userRoles ?? []).map((ur) => ur.role.code) };
   }
 
-  list(page: number, limit: number) {
+  list(page = 1, limit = 20) {
     const { page: p, limit: l, offset } = normalizePagination({ page, limit });
     return this.users
       .findAndCount({

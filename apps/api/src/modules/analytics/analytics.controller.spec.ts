@@ -65,12 +65,11 @@ describe('AnalyticsController', () => {
   // (assertCanView у AnalyticsService), контролер просто делегує юзера.
   it('getForVenue делегує юзера і діапазон у сервіс', async () => {
     analytics.getForVenue.mockResolvedValue({ total: 5 });
-    const res = await controller.getForVenue(
-      { sub: 'u1' } as any,
-      'v1',
-      '2024-01-01',
-      '2024-01-31',
-    );
+    const res = await controller.getForVenue({ sub: 'u1' } as any, 'v1', {
+      from: '2024-01-01',
+      to: '2024-01-31',
+    } as any);
+
     expect(analytics.getForVenue).toHaveBeenCalledWith(
       'u1',
       'v1',

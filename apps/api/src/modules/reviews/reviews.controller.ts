@@ -20,7 +20,6 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -28,6 +27,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
+import { ReviewAdminQueryDto, ReviewListQueryDto } from './dto/query-reviews.dto';
 import { Review } from './entities/review.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
@@ -120,31 +120,11 @@ export class ReviewsController {
     type: Review,
     description: 'Сторінкований список відгуків',
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Номер сторінки',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Розмір сторінки',
-  })
-  @ApiQuery({
-    name: 'sort',
-    required: false,
-    enum: ['newest', 'oldest', 'highest', 'lowest'],
-    description: 'Сортування',
-  })
   list(
     @Param('venueId', ParseUuidPipe) venueId: string,
-    @Query('page') page: number,
-    @Query('limit') limit: number,
-    @Query('sort') sort?: 'newest' | 'oldest' | 'highest' | 'lowest',
+    @Query() q: ReviewListQueryDto,
   ) {
-    return this.reviews.listForVenue(venueId, page, limit, sort);
+    return this.reviews.listForVenue(venueId, q.page, q.limit, q.sort);
   }
 
   @Public()
@@ -235,12 +215,9 @@ export class ReviewsController {
     type: Review,
     description: 'Сторінкований список відгуків',
   })
-  @ApiQuery({ name: 'venueId', required: false, type: String })
-  @ApiQuery({ name: 'page', required: false, type: Number })
-  @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу review:edit:any' })
-  listAdmin(@Query() q: { venueId?: string; page?: number; limit?: number }) {
+  listAdmin(@Query() q: ReviewAdminQueryDto) {
     return this.reviews.listAdmin(q);
   }
 }

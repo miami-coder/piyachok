@@ -13,10 +13,10 @@ import {
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -48,22 +48,10 @@ export class VenuesAdminController {
     type: Venue,
     description: 'Сторінкований список закладів',
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Номер сторінки',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Розмір сторінки',
-  })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу venue:moderate' })
-  list(@Query('page') page: number, @Query('limit') limit: number) {
-    return this.venues.findPending(page, limit);
+  list(@Query() q: PaginationQueryDto) {
+    return this.venues.findPending(q.page, q.limit);
   }
 
   @Get('approved')
@@ -73,22 +61,10 @@ export class VenuesAdminController {
     type: Venue,
     description: 'Сторінкований список схвалених закладів',
   })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Номер сторінки',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Розмір сторінки',
-  })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу venue:moderate' })
-  listApproved(@Query('page') page: number, @Query('limit') limit: number) {
-    return this.venues.findApproved(page, limit);
+  listApproved(@Query() q: PaginationQueryDto) {
+    return this.venues.findApproved(q.page, q.limit);
   }
 
   @Post(':id/approve')

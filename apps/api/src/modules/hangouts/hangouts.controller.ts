@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -37,6 +36,7 @@ import {
   ApiPaginatedResponse,
 } from '../../common/swagger/response-helpers';
 import { HangoutsService } from './hangouts.service';
+import { HangoutListQueryDto, MyHangoutsQueryDto } from './dto/query-hangouts.dto';
 import { Hangout } from './entities/hangout.entity';
 import { CreateHangoutDto } from './dto/create-hangout.dto';
 
@@ -52,46 +52,7 @@ export class HangoutsController {
     type: Hangout,
     description: 'Сторінкований список зустрічей',
   })
-  @ApiQuery({
-    name: 'venueId',
-    required: false,
-    type: String,
-    description: 'Фільтр за закладом',
-  })
-  @ApiQuery({
-    name: 'date',
-    required: false,
-    type: String,
-    description: 'Фільтр за датою (YYYY-MM-DD)',
-  })
-  @ApiQuery({
-    name: 'status',
-    required: false,
-    type: String,
-    description: 'Статус: open | filled | cancelled | completed',
-  })
-  @ApiQuery({
-    name: 'page',
-    required: false,
-    type: Number,
-    description: 'Номер сторінки',
-  })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: 'Розмір сторінки',
-  })
-  list(
-    @Query()
-    q: {
-      venueId?: string;
-      date?: string;
-      status?: string;
-      page?: number;
-      limit?: number;
-    },
-  ) {
+  list(@Query() q: HangoutListQueryDto) {
     return this.hangouts.listPublic(q);
   }
 
@@ -221,24 +182,9 @@ export class HangoutsController {
   })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiBadRequestResponse({ description: 'Некоректне значення role' })
-  @ApiQuery({
-    name: 'role',
-    required: true,
-    enum: ['created', 'joined', 'all'],
-    description: 'Які зустрічі показати (невідоме чи відсутнє значення — 400)',
-  })
-  myList(
-    @CurrentUser() u: JwtUser,
-    @Query('role') role?: string,
-  ) {
+  myList(@CurrentUser() u: JwtUser, @Query() q: MyHangoutsQueryDto) {
     // Невідоме або відсутнє значення не має мовчки провалюватись у найшироку
-    // гілку «all» — валідуємо на межі, як granularity в аналітиці.
-    const value = (['created', 'joined', 'all'] as const).find(
-      (r) => r === role,
-    );
-    if (!value) {
-      throw new BadRequestException('Некоректне значення role');
-    }
-    return this.hangouts.listMine(u.sub, value).then((data) => ({ data }));
+    // гілку «all» — role обовʼязкова (@IsIn) і валідується на межі.
+    return this.hangouts.listMine(u.sub, q.role).then((data) => ({ data }));
   }
 }

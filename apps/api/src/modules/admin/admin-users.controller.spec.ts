@@ -34,8 +34,8 @@ describe('AdminUsersController — делегація в сервіс', () => {
 
   it('list делегує (page, limit)', async () => {
     service.list.mockResolvedValue({ data: [], meta: {} });
-    await controller.list('2' as any, '10' as any);
-    expect(service.list).toHaveBeenCalledWith('2', '10');
+    await controller.list({ page: 2, limit: 10 } as any);
+    expect(service.list).toHaveBeenCalledWith(2, 10);
   });
 
   it('get делегує (id)', async () => {
