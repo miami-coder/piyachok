@@ -103,13 +103,9 @@ export function approveVenue(venueId: string): Promise<unknown> {
   return api(`/admin/venues/${venueId}/approve`, { method: 'POST' })
 }
 
-/** POST /admin/venues/:id/reject — відхилення з причиною (тіло '{}'). */
+/** POST /admin/venues/:id/reject — як approve, запит без тіла. */
 export function rejectVenue(venueId: string): Promise<unknown> {
-  return api(`/admin/venues/${venueId}/reject`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  })
+  return api(`/admin/venues/${venueId}/reject`, { method: 'POST' })
 }
 
 /** POST /admin/venues/:id/assign-owner — призначити власника. */

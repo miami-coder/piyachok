@@ -39,9 +39,9 @@ describe('VenueRejectButton', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(String(url)).toBe('/api/v1/admin/venues/v1/reject')
     expect((init as RequestInit).method).toBe('POST')
-    // бекенд ігнорує тіло reject — шлемо порожній JSON
-    expect((init as RequestInit).body).toBe('{}')
-    expect((init as RequestInit).headers).toMatchObject({ 'Content-Type': 'application/json' })
+    // reject приймається без тіла — як approve
+    expect((init as RequestInit).body).toBeUndefined()
+    expect(init).not.toHaveProperty('headers')
     expect(refresh).toHaveBeenCalled()
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })

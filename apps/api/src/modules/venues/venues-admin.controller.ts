@@ -24,7 +24,6 @@ import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { VenuesService } from './venues.service';
-import { ChangeStatusDto } from './dto/change-status.dto';
 import { Venue, VenueStatus } from './entities/venue.entity';
 import { UsersService } from '../users/users.service';
 import {
@@ -112,7 +111,7 @@ export class VenuesAdminController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу venue:moderate' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  reject(@Param('id', ParseUuidPipe) id: string, @Body() _dto: ChangeStatusDto) {
+  reject(@Param('id', ParseUuidPipe) id: string) {
     return this.venues
       .changeStatus(id, VenueStatus.Rejected)
       .then((v) => ({ data: v }));

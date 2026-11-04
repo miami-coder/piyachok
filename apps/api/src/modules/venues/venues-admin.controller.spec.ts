@@ -56,7 +56,7 @@ describe('VenuesAdminController', () => {
 
   it('reject changes status to Rejected and wraps in { data }', async () => {
     venues.changeStatus.mockResolvedValue({ id: 'v1', status: 'rejected' });
-    const res = await controller.reject('v1', { reason: 'spam' } as any);
+    const res = await controller.reject('v1');
     expect(venues.changeStatus).toHaveBeenCalledWith(
       'v1',
       VenueStatus.Rejected,
