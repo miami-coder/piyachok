@@ -2057,7 +2057,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/me/hangouts",
+              "raw": "{{baseUrl}}/me/hangouts?role=all",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -2068,8 +2068,7 @@
               "query": [
                 {
                   "key": "role",
-                  "value": "all",
-                  "disabled": true
+                  "value": "all"
                 }
               ]
             },

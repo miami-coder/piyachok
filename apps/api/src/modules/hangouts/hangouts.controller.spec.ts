@@ -81,4 +81,18 @@ describe('HangoutsController', () => {
     expect(hangouts.listMine).toHaveBeenCalledWith('u1', 'created');
     expect(res.data[0].id).toBe('h1');
   });
+
+  it('myList rejects unknown role with 400', async () => {
+    expect(() => controller.myList({ sub: 'u1' } as any, 'bogus')).toThrow(
+      'Некоректне значення role',
+    );
+    expect(hangouts.listMine).not.toHaveBeenCalled();
+  });
+
+  it('myList rejects missing role with 400', async () => {
+    expect(() => controller.myList({ sub: 'u1' } as any, undefined)).toThrow(
+      'Некоректне значення role',
+    );
+    expect(hangouts.listMine).not.toHaveBeenCalled();
+  });
 });

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -219,16 +220,25 @@ export class HangoutsController {
     description: 'Список зустрічей користувача',
   })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
+  @ApiBadRequestResponse({ description: 'Некоректне значення role' })
   @ApiQuery({
     name: 'role',
     required: true,
     enum: ['created', 'joined', 'all'],
-    description: 'Які зустрічі показати',
+    description: 'Які зустрічі показати (невідоме чи відсутнє значення — 400)',
   })
   myList(
     @CurrentUser() u: JwtUser,
-    @Query('role') role: 'created' | 'joined' | 'all',
+    @Query('role') role?: string,
   ) {
-    return this.hangouts.listMine(u.sub, role).then((data) => ({ data }));
+    // Невідоме або відсутнє значення не має мовчки провалюватись у найшироку
+    // гілку «all» — валідуємо на межі, як granularity в аналітиці.
+    const value = (['created', 'joined', 'all'] as const).find(
+      (r) => r === role,
+    );
+    if (!value) {
+      throw new BadRequestException('Некоректне значення role');
+    }
+    return this.hangouts.listMine(u.sub, value).then((data) => ({ data }));
   }
 }

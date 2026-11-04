@@ -17,6 +17,15 @@ describe('normalizePagination', () => {
     expect(normalizePagination({ limit: 0 }).limit).toBe(1);
   });
 
+  it('falls back to defaults for non-numeric values instead of NaN', () => {
+    expect(normalizePagination({ page: 'abc', limit: 'abc' })).toEqual({
+      page: 1,
+      limit: 20,
+      offset: 0,
+    });
+    expect(normalizePagination({ limit: Infinity }).limit).toBe(20);
+  });
+
   it('computes offset', () => {
     expect(normalizePagination({ page: 3, limit: 10 })).toEqual({
       page: 3,
