@@ -77,7 +77,10 @@ describe('VenueAssignOwnerButton', () => {
     renderButton()
     await openModal()
     await waitFor(() =>
-      expect(fetchMock).toHaveBeenCalledWith('/api/v1/admin/users?limit=100', undefined),
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/v1/admin/users?limit=100',
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      ),
     )
     const options = screen.getAllByRole('option')
     // перший — плейсхолдер «— Оберіть користувача —», далі користувачі

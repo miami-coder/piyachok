@@ -26,6 +26,9 @@ interface DetailState {
 // немає ані даних, ані помилки), бо sync setState у useEffect забороняє
 // lint-правило react-hooks/set-state-in-effect. Retry (event handler) скидає
 // дані і підіймає attempt → ефект перевитягує.
+// Cleanup абортить запит (AbortController): швидка навігація не лишає запит
+// у мережі; guard signal.aborted не пропускає ані setState після абортнутого
+// запиту, ані запис стану, якщо відповідь встигла прийти до abort.
 export default function HangoutDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { user } = useUser()
@@ -33,11 +36,11 @@ export default function HangoutDetailPage() {
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
-    let cancelled = false
-    api<RawHangout>(`/hangouts/${id}`)
-      .then((raw) => { if (!cancelled) setState({ id, hangout: parseHangout(raw), error: null }) })
-      .catch((e) => { if (!cancelled) setState({ id, hangout: null, error: e instanceof ApiError ? e.message : 'Не вдалося завантажити зустріч' }) })
-    return () => { cancelled = true }
+    const ac = new AbortController()
+    api<RawHangout>(`/hangouts/${id}`, { signal: ac.signal })
+      .then((raw) => { if (!ac.signal.aborted) setState({ id, hangout: parseHangout(raw), error: null }) })
+      .catch((e) => { if (!ac.signal.aborted) setState({ id, hangout: null, error: e instanceof ApiError ? e.message : 'Не вдалося завантажити зустріч' }) })
+    return () => ac.abort()
   }, [id, attempt])
 
   const fresh = state.id === id

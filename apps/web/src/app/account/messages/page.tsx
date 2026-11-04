@@ -22,22 +22,29 @@ export default function AccountMessagesPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = useCallback(async (p: number) => {
+  // signal приходить тільки з ефекту (скасування при розмонтуванні); кліки
+  // пагінації — event handler'и, їхні запити не абортимо. Guard signal.aborted
+  // не пропускає ані запис стану після abort, ані помилку скасованого запиту.
+  const load = useCallback(async (p: number, signal?: AbortSignal) => {
     setError(null)
     try {
-      const list = await getMyMessages(p, LIMIT)
+      const list = await getMyMessages(p, LIMIT, signal)
+      if (signal?.aborted) return
       setMessages(list.data.map(parseMessage))
       setTotal(list.meta?.total ?? list.data.length)
       setPage(p)
     } catch (e) {
+      if (signal?.aborted) return
       setError(e instanceof ApiError ? e.message : 'Не вдалося завантажити повідомлення')
     } finally {
-      setLoading(false)
+      if (!signal?.aborted) setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    void load(1)
+    const ac = new AbortController()
+    void load(1, ac.signal)
+    return () => ac.abort()
   }, [load])
 
   async function markRead(m: Message) {

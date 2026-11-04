@@ -13,11 +13,12 @@ import { apiQuiet } from '@/lib/api/client'
 import type { SessionUser } from '@/types/user'
 import type { LoginValues, RegisterValues } from '@/lib/validation/auth'
 
-async function bffPost(path: string, body: unknown): Promise<Response> {
+async function bffPost(path: string, body: unknown, signal?: AbortSignal): Promise<Response> {
   return fetch(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
+    signal,
   })
 }
 
@@ -32,8 +33,8 @@ export function authRegister(values: RegisterValues): Promise<Response> {
 }
 
 /** POST /api/auth/oauth — завершення OAuth-колбеку; токени йдуть тілом, щоб не потрапити в URL. */
-export function authOauth(tokens: { accessToken: string; refreshToken: string }): Promise<Response> {
-  return bffPost('/api/auth/oauth', tokens)
+export function authOauth(tokens: { accessToken: string; refreshToken: string }, signal?: AbortSignal): Promise<Response> {
+  return bffPost('/api/auth/oauth', tokens, signal)
 }
 
 /** POST /api/auth/logout — вихід; мережева помилка не має ламати вихід (→ null). */
@@ -42,8 +43,8 @@ export async function authLogout(): Promise<Response | null> {
 }
 
 /** GET /api/v1/auth/me — користувач сесії або null (проксі сам рефрешить токен). */
-export async function authMe(): Promise<SessionUser | null> {
-  const res = await apiQuiet('/auth/me')
+export async function authMe(signal?: AbortSignal): Promise<SessionUser | null> {
+  const res = await apiQuiet('/auth/me', { signal })
   if (!res.ok) return null
   const body = (await res.json().catch(() => null)) as { data?: SessionUser } | null
   return body?.data ?? null

@@ -12,8 +12,8 @@ export interface TagRef {
 }
 
 /** Довідник тегів GET /venues/tags — публічний ендпоінт, без авторизації. */
-export async function getVenueTags(): Promise<TagRef[]> {
-  const res = await apiList<TagRef>('/venues/tags')
+export async function getVenueTags(signal?: AbortSignal): Promise<TagRef[]> {
+  const res = await apiList<TagRef>('/venues/tags', { signal })
   return res.data
 }
 
@@ -31,20 +31,23 @@ export interface FeatureRef {
 }
 
 /** Довідник типів закладів GET /venues/types — публічний. */
-export async function getVenueTypes(): Promise<TypeRef[]> {
-  const res = await apiList<TypeRef>('/venues/types')
+export async function getVenueTypes(signal?: AbortSignal): Promise<TypeRef[]> {
+  const res = await apiList<TypeRef>('/venues/types', { signal })
   return res.data
 }
 
 /** Довідник особливостей GET /venues/features — публічний. */
-export async function getVenueFeatures(): Promise<FeatureRef[]> {
-  const res = await apiList<FeatureRef>('/venues/features')
+export async function getVenueFeatures(signal?: AbortSignal): Promise<FeatureRef[]> {
+  const res = await apiList<FeatureRef>('/venues/features', { signal })
   return res.data
 }
 
 /**
  * POST /venues/:id/view — фіксація перегляду. Fire-and-forget: рекордер нічого
  * не рендерить, мережева помилка не має ніяк позначатись на UI, тому тіхає тут.
+ * Свідомо БЕЗ signal і без abort з ефекту: перегляд — бізнес-подія, а не запит
+ * даних; навігація зі сторінки закладу (розмонтування рекордера) не має її
+ * скасовувати, бо візит уже відбувся. Дедуп повторів — на боці бекенда.
  */
 export function recordVenueView(venueId: string, sessionId: string): void {
   apiQuiet(`/venues/${venueId}/view`, {

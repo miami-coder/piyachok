@@ -29,18 +29,20 @@ export function VenueAssignOwnerButton({
   // Список користувачів тягнемо один раз на відкриття модалки (limit=100).
   // Окремого loading-стану немає: доки список не завантажено, вибір порожній,
   // тож «Зберегти» і так disabled через !userId
+  // Розмонтування/закриття модалки абортить запит; guard signal.aborted
+  // не пропускає ані пізній setState, ані toast від скасованого запиту.
   useEffect(() => {
     if (!open) return
-    let cancelled = false
-    getAdminUserOptions()
+    const ac = new AbortController()
+    getAdminUserOptions(ac.signal)
       .then((res) => {
-        if (!cancelled) setUsers(res.data.map(parseAdminUser))
+        if (!ac.signal.aborted) setUsers(res.data.map(parseAdminUser))
       })
       .catch((e) => {
-        if (!cancelled) toast(authApiError(e) ?? 'Не вдалося завантажити користувачів', 'error')
+        if (!ac.signal.aborted) toast(authApiError(e) ?? 'Не вдалося завантажити користувачів', 'error')
       })
     return () => {
-      cancelled = true
+      ac.abort()
     }
   }, [open, toast])
 

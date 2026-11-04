@@ -5,8 +5,8 @@ import { api, apiList, apiVoid } from '@/lib/api/client'
 import type { RawAdminUser } from '@/types/admin'
 
 /** GET /admin/users?limit=100 — вибір користувача в адмін-модалках (dropdown). */
-export function getAdminUserOptions() {
-  return apiList<RawAdminUser>('/admin/users?limit=100')
+export function getAdminUserOptions(signal?: AbortSignal) {
+  return apiList<RawAdminUser>('/admin/users?limit=100', { signal })
 }
 
 /** PATCH /me/profile — редагування власного профілю. */

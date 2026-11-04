@@ -15,9 +15,10 @@ export function NotificationBell() {
   const { user } = useUser()
   const [count, setCount] = useState(0)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await api<{ count: number }>('/me/messages/unread-count')
+      const res = await api<{ count: number }>('/me/messages/unread-count', { signal })
+      if (signal?.aborted) return
       setCount(res.count)
     } catch {
       // тихо: дзвіночок не критичний, помилку не показуємо
@@ -26,9 +27,13 @@ export function NotificationBell() {
 
   useEffect(() => {
     if (!user) return
-    void refresh()
-    const id = setInterval(() => void refresh(), POLL_MS)
-    return () => clearInterval(id)
+    const ac = new AbortController()
+    void refresh(ac.signal)
+    const id = setInterval(() => void refresh(ac.signal), POLL_MS)
+    return () => {
+      clearInterval(id)
+      ac.abort() // скасовує in-flight запит опиту при розмонтуванні/зміні user
+    }
   }, [user, refresh])
 
   if (!user) return null

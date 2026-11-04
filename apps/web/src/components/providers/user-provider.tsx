@@ -20,14 +20,14 @@ export function UserProvider({ initialUser, children }: { initialUser: SessionUs
   // Підтвердження сесії: якщо SSR відрендерив гостя через протермінований
   // access-токен, проксі тут зробить refresh і поверне користувача.
   useEffect(() => {
-    let cancelled = false
-    authMe()
+    const ac = new AbortController()
+    authMe(ac.signal)
       .then((next) => {
-        if (cancelled || !next) return
+        if (ac.signal.aborted || !next) return
         setUser((prev) => (prev?.id === next.id ? prev : next))
       })
       .catch(() => null)
-    return () => { cancelled = true }
+    return () => ac.abort()
   }, [])
 
   const logout = useCallback(async () => {

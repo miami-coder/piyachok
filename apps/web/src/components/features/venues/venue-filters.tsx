@@ -38,17 +38,21 @@ export function VenueFilters({ initial }: { initial: CatalogQuery }) {
   )
   const [geoError, setGeoError] = useState<string | null>(null)
 
-  // Довідник тегів для чипів (публічний ендпоінт, без авторизації)
+  // Довідник тегів для чипів (публічний ендпоінт, без авторизації).
+  // Один AbortController на всі три: cleanup (розмонтування) скасовує запити,
+  // guard не пропускає пізній setState, якщо відповідь встигла до abort.
   useEffect(() => {
-    getVenueTags()
-      .then(setTags)
+    const ac = new AbortController()
+    getVenueTags(ac.signal)
+      .then((value) => { if (!ac.signal.aborted) setTags(value) })
       .catch(() => undefined)
-    getVenueTypes()
-      .then(setTypes)
+    getVenueTypes(ac.signal)
+      .then((value) => { if (!ac.signal.aborted) setTypes(value) })
       .catch(() => undefined)
-    getVenueFeatures()
-      .then(setFeatures)
+    getVenueFeatures(ac.signal)
+      .then((value) => { if (!ac.signal.aborted) setFeatures(value) })
       .catch(() => undefined)
+    return () => ac.abort()
   }, [])
 
   // Перемикання чипа: додає/забирає slug у CSV-стані тегів

@@ -4,9 +4,9 @@
 import { api, apiList } from '@/lib/api/client'
 import type { RawMessage } from '@/types/message'
 
-/** Вхідні повідомлення користувача (пагінація). */
-export function getMyMessages(page: number, limit: number) {
-  return apiList<RawMessage>(`/me/messages?page=${page}&limit=${limit}`)
+/** Вхідні повідомлення користувача (пагінація). signal — для скасування з ефектів. */
+export function getMyMessages(page: number, limit: number, signal?: AbortSignal) {
+  return apiList<RawMessage>(`/me/messages?page=${page}&limit=${limit}`, { signal })
 }
 
 /** PATCH /me/messages/:id/read — позначка прочитання. */

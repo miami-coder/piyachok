@@ -11,7 +11,7 @@ export function CallbackClient() {
   const [failed, setFailed] = useState(false)
 
   useEffect(() => {
-    let cancelled = false
+    const ac = new AbortController()
     const access = searchParams.get('access')
     const refresh = searchParams.get('refresh')
 
@@ -20,13 +20,13 @@ export function CallbackClient() {
       if (access && refresh) {
         try {
           // токени йдуть тілом, щоб не потрапити в жоден URL
-          const res = await authOauth({ accessToken: access, refreshToken: refresh })
+          const res = await authOauth({ accessToken: access, refreshToken: refresh }, ac.signal)
           ok = res.ok
         } catch {
           ok = false
         }
       }
-      if (cancelled) return
+      if (ac.signal.aborted) return
       const destination = ok ? '/' : '/auth/login'
       if (ok) {
         // ПОВНЕ перевантаження: cookie вже в контейнері, а router.replace('/')
@@ -42,7 +42,7 @@ export function CallbackClient() {
     }
 
     finish()
-    return () => { cancelled = true }
+    return () => ac.abort()
   }, [router, searchParams])
 
   if (failed) {
