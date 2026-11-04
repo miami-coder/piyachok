@@ -1,6 +1,6 @@
 import 'server-only'
 import { cookies } from 'next/headers'
-import { BACKEND_URL } from '@/lib/api/backend'
+import { backendFetch } from '@/lib/api/server-client'
 
 export const SESSION_COOKIE = 'piyachok_session'
 
@@ -54,10 +54,11 @@ export async function clearSessionCookie(): Promise<void> {
 
 export async function refreshTokens(refreshToken: string): Promise<SessionTokens | null> {
   try {
-    const res = await fetch(`${BACKEND_URL}/api/v1/auth/refresh`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
+    const res = await backendFetch('/auth/refresh', {
+      init: {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      },
     })
     if (!res.ok) return null
     const body = (await res.json()) as { accessToken?: string; refreshToken?: string }

@@ -10,7 +10,7 @@ interface ServerFetchOpts {
   init?: RequestInit
 }
 
-async function backendFetch(path: string, opts: ServerFetchOpts = {}) {
+export async function backendFetch(path: string, opts: ServerFetchOpts = {}) {
   const headers = new Headers(opts.init?.headers)
   if (opts.tokens?.accessToken) headers.set('Authorization', `Bearer ${opts.tokens.accessToken}`)
   if (opts.init?.body && !headers.has('content-type')) headers.set('content-type', 'application/json')
