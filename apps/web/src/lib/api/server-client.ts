@@ -1,9 +1,8 @@
 import 'server-only'
 import { parseData, parseList } from '@/lib/api/parse'
+import { BACKEND_URL } from '@/lib/api/backend'
 import type { PaginatedMeta } from '@/types/api'
 import type { SessionTokens } from '@/lib/auth/session'
-
-export const BACKEND_URL = process.env.BACKEND_URL ?? 'http://localhost:3000'
 
 interface ServerFetchOpts {
   tokens?: SessionTokens | null

@@ -2,16 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   getSessionTokens, refreshTokens, SESSION_COOKIE, sessionCookieOptions, encodeTokens,
 } from '@/lib/auth/session'
+import { BACKEND_URL } from '@/lib/api/backend'
 
 export const dynamic = 'force-dynamic'
-
-const BACKEND = process.env.BACKEND_URL ?? 'http://localhost:3000'
 
 type Ctx = { params: Promise<{ path: string[] }> }
 
 async function forward(req: NextRequest, path: string[], accessToken: string | null, body?: ArrayBuffer): Promise<Response> {
   // search з req.url — однаково працює і для NextRequest, і для plain Request у тестах
-  const target = `${BACKEND}/api/v1/${path.join('/')}${new URL(req.url).search}`
+  const target = `${BACKEND_URL}/api/v1/${path.join('/')}${new URL(req.url).search}`
   const headers = new Headers()
   const contentType = req.headers.get('content-type')
   if (contentType) headers.set('content-type', contentType)

@@ -1,7 +1,7 @@
 // Клієнтський сервіс закладів: теги, перегляди, CRUD, фото, обране.
 // Обгортки над api()/apiVoid() з src/lib/api/client — опції запитів живуть тут.
 
-import { api, apiList, apiVoid } from '@/lib/api/client'
+import { api, apiList, apiQuiet, apiVoid } from '@/lib/api/client'
 
 /** Довідник тегів для чипів (GET /venues/tags — публічний). */
 export interface TagRef {
@@ -47,7 +47,7 @@ export async function getVenueFeatures(): Promise<FeatureRef[]> {
  * не рендерить, мережева помилка не має ніяк позначатись на UI, тому тіхає тут.
  */
 export function recordVenueView(venueId: string, sessionId: string): void {
-  fetch(`/api/v1/venues/${venueId}/view`, {
+  apiQuiet(`/venues/${venueId}/view`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ sessionId: sessionId.slice(0, 64) }),

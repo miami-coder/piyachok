@@ -52,6 +52,13 @@ export async function apiVoid(path: string, init?: RequestInit): Promise<void> {
   await parseEmpty(res)
 }
 
+// Сирий запит через проксі без «клієнтських» побічних ефектів: без 401-редіректу
+// і без розбору конверта помилок. Для викликів, де помилка — не подія UI:
+// пінг перегляду (fire-and-forget) і best-effort підтвердження сесії (auth/me).
+export async function apiQuiet(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(`/api/v1${path}`, init)
+}
+
 export function authApiError(e: unknown): string | null {
   if (e instanceof ApiError) return e.message
   return null

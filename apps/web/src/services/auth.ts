@@ -6,8 +6,10 @@
 //   не потрібен, а 401-редірект із client.ts був би шкідливим (форма сама
 //   показує помилку тіла відповіді).
 // - /api/v1/auth/me: best-effort підтвердження сесії — його падіння не має
-//   кидатись нагору (проксі сам спробує refresh), тому сирий fetch без 401-логіки.
+//   кидатись нагору (проксі сам спробує refresh), тому apiQuiet з client.ts
+//   запит без 401-логіки.
 
+import { apiQuiet } from '@/lib/api/client'
 import type { SessionUser } from '@/types/user'
 import type { LoginValues, RegisterValues } from '@/lib/validation/auth'
 
@@ -41,7 +43,7 @@ export async function authLogout(): Promise<Response | null> {
 
 /** GET /api/v1/auth/me — користувач сесії або null (проксі сам рефрешить токен). */
 export async function authMe(): Promise<SessionUser | null> {
-  const res = await fetch('/api/v1/auth/me')
+  const res = await apiQuiet('/auth/me')
   if (!res.ok) return null
   const body = (await res.json().catch(() => null)) as { data?: SessionUser } | null
   return body?.data ?? null

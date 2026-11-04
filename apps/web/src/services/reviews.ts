@@ -2,16 +2,14 @@
 // виділення/зняття виділення критиком.
 
 import { api, apiVoid } from '@/lib/api/client'
-import { ApiError } from '@/lib/api/parse'
 
 /**
  * POST /venues/:venueId/reviews — новий відгук. Тіло multipart (rating, text,
- * checkPhoto): браузер сам ставить boundary, тому сирий fetch БЕЗ content-type.
- * !ok → ApiError з message тіла (може бути не-JSON).
+ * checkPhoto): браузер сам ставить boundary, тому content-type не ставимо.
+ * Помилка → ApiError з message тіла (errorFromResponse у parse).
  */
-export async function createVenueReview(venueId: string, fd: FormData): Promise<void> {
-  const res = await fetch(`/api/v1/venues/${venueId}/reviews`, { method: 'POST', body: fd })
-  if (!res.ok) throw new ApiError(res.status, 'ERROR', await reviewErrorMessage(res))
+export function createVenueReview(venueId: string, fd: FormData): Promise<unknown> {
+  return api(`/venues/${venueId}/reviews`, { method: 'POST', body: fd })
 }
 
 /** PATCH /reviews/:id — правка власного відгуку (rating + text, JSON). */
@@ -39,14 +37,4 @@ export function featureReview(reviewId: string): Promise<unknown> {
 /** DELETE /reviews/:id/feature — зняти виділення (200 з data — звичайний api). */
 export function unfeatureReview(reviewId: string): Promise<unknown> {
   return api(`/reviews/${reviewId}/feature`, { method: 'DELETE' })
-}
-
-// витягнути message з помилкового тіла (може бути не-JSON)
-async function reviewErrorMessage(res: Response): Promise<string> {
-  try {
-    const body = (await res.clone().json()) as { error?: { message?: string } } | null
-    return body?.error?.message ?? 'Сервіс тимчасово недоступний'
-  } catch {
-    return 'Сервіс тимчасово недоступний'
-  }
 }
