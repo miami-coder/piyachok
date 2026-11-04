@@ -30,8 +30,11 @@ export class AnalyticsService {
     venueId: string,
     userId?: string | null,
     sessionId?: string | null,
+    clientIp?: string | null,
   ): Promise<{ recorded: boolean }> {
-    const identity = userId ?? sessionId;
+    // Дедуп не залежить виключно від клієнта: коли немає ані userId, ані
+    // sessionId, контролер передає клієнтський IP як фолбек-ідентичність.
+    const identity = userId ?? sessionId ?? clientIp;
     if (identity) {
       const dedupKey = `view:dedup:${identity}:${venueId}`;
       const seen = await this.cache.get<string>(dedupKey);

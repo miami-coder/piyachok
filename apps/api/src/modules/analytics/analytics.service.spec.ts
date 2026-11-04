@@ -77,6 +77,21 @@ describe('AnalyticsService', () => {
     expect(cache.get).not.toHaveBeenCalled();
   });
 
+  it('recordView без userId/sessionId дедупить по IP-фолбеку', async () => {
+    cache.get.mockResolvedValueOnce(null);
+    const first = await service.recordView('v1', null, null, '203.0.113.7');
+    expect(first).toEqual({ recorded: true });
+    expect(cache.set).toHaveBeenCalledWith(
+      'view:dedup:203.0.113.7:v1',
+      '1',
+      expect.any(Number),
+    );
+    cache.get.mockResolvedValueOnce('1');
+    const second = await service.recordView('v1', null, null, '203.0.113.7');
+    expect(second).toEqual({ recorded: false });
+    expect(views.save).toHaveBeenCalledTimes(1);
+  });
+
   it('recordEvent persists analytics event', async () => {
     await service.recordEvent('v1', 'u1', 'review_created', { x: 1 });
     expect(eventsRepo.save).toHaveBeenCalledWith({

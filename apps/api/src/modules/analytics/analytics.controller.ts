@@ -7,8 +7,10 @@ import {
   Param,
   Post,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth,
@@ -30,6 +32,19 @@ import { AnalyticsService, type Granularity } from './analytics.service';
 import { RecordViewDto } from './dto/record-view.dto';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
+
+/**
+ * Клієнтський IP для фолбек-дедупа переглядів: останнє значення
+ * X-Forwarded-For дописує найближчий довірений проксі (підміна перших
+ * елементів ланцюга на результат не впливає), далі — socket-адреса.
+ * Глобальний trust proxy навмисно не вмикається: req.ip, яким керується
+ * тротлер, має лишатися адресою проксі, а не клієнта.
+ */
+function clientIpOf(req: Request): string | null {
+  const xff = req.headers['x-forwarded-for'];
+  const last = Array.isArray(xff) ? xff[xff.length - 1] : xff?.split(',').pop();
+  return last?.trim() || req.ip || null;
+}
 
 @ApiTags('Analytics')
 @Controller()
@@ -56,9 +71,14 @@ export class AnalyticsController {
     },
   })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  recordView(@Param('id') id: string, @Body() dto: RecordViewDto) {
+  recordView(
+    @Param('id') id: string,
+    @Body() dto: RecordViewDto,
+    @Req() req: Request,
+  ) {
+    // Дедуп не покладається на клієнта: без sessionId фолбек — IP клієнта
     return this.analytics
-      .recordView(id, null, dto.sessionId)
+      .recordView(id, null, dto.sessionId ?? null, clientIpOf(req))
       .then((data) => ({ data }));
   }
 

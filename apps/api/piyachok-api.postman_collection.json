@@ -2631,7 +2631,7 @@
                 "view"
               ]
             },
-            "description": "Лічильник переглядів, fire-and-forget; на бекенді дедуп 30 хв по (заклад, session) в Redis."
+            "description": "Лічильник переглядів, fire-and-forget; на бекенді дедуп 30 хв по (заклад, session або IP) в Redis."
           },
           "response": []
         },

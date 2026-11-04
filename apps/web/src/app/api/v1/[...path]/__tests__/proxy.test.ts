@@ -136,4 +136,17 @@ describe('проксі /api/v1', () => {
     await proxyGet(new Request('http://l/api/v1/venues') as never, makeCtx(['venues']) as never)
     expect(fetchMock).toHaveBeenCalledOnce()
   })
+
+  it('передає x-forwarded-for на бекенд (дедуп переглядів по IP)', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect((init?.headers as Headers).get('x-forwarded-for')).toBe('198.51.100.7')
+      return jsonRes({ data: { recorded: true } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await proxyPost(new Request('http://l/api/v1/venues/v1/view', {
+      method: 'POST',
+      headers: { 'x-forwarded-for': '198.51.100.7' },
+    }) as never, makeCtx(['venues', 'v1', 'view']) as never)
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
 })

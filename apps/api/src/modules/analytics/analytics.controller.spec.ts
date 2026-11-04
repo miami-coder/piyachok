@@ -31,9 +31,36 @@ describe('AnalyticsController', () => {
 
   it('recordView delegates and wraps in data', async () => {
     analytics.recordView.mockResolvedValue({ views: 1 });
-    const res = await controller.recordView('v1', { sessionId: 's1' } as any);
-    expect(analytics.recordView).toHaveBeenCalledWith('v1', null, 's1');
+    // headers без XFF → фолбек на socket-адресу req.ip
+    const req = { headers: {}, ip: '203.0.113.7' } as any;
+    const res = await controller.recordView(
+      'v1',
+      { sessionId: 's1' } as any,
+      req,
+    );
+    expect(analytics.recordView).toHaveBeenCalledWith(
+      'v1',
+      null,
+      's1',
+      '203.0.113.7',
+    );
     expect(res.data).toEqual({ views: 1 });
+  });
+
+  it('recordView без sessionId фолбекить на клієнтський IP з XFF', async () => {
+    analytics.recordView.mockResolvedValue({ recorded: true });
+    const req = {
+      headers: { 'x-forwarded-for': '10.0.0.9, 198.51.100.7' },
+      ip: '172.17.0.5',
+    } as any;
+    await controller.recordView('v1', {} as any, req);
+    // останнє значення ланцюга — реальний клієнт (дописує довірений проксі)
+    expect(analytics.recordView).toHaveBeenCalledWith(
+      'v1',
+      null,
+      null,
+      '198.51.100.7',
+    );
   });
 
   it('getForVenue allows when user has analytics:view:all', async () => {
