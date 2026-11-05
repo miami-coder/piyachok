@@ -21,7 +21,10 @@ export class NewsListQueryDto extends PaginationQueryDto {
   @IsUUID('all')
   venueId?: string;
 
-  @ApiPropertyOptional({ enum: ['true'], description: "'true' — лише промотовані" })
+  @ApiPropertyOptional({
+    enum: ['true'],
+    description: "'true' — лише промотовані",
+  })
   @IsOptional()
   @IsIn(['true'])
   isPromoted?: 'true';

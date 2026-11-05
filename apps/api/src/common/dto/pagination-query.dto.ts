@@ -13,7 +13,11 @@ import { MAX_LIMIT } from '../utils/pagination.util';
  * на контролерах знято.
  */
 export class PaginationQueryDto {
-  @ApiPropertyOptional({ type: Number, description: 'Номер сторінки', minimum: 1 })
+  @ApiPropertyOptional({
+    type: Number,
+    description: 'Номер сторінки',
+    minimum: 1,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()

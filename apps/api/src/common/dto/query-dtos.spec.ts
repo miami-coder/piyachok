@@ -121,7 +121,10 @@ describe('Analytics DTO', () => {
       'isIso8601',
     );
     expect(
-      await errors(AnalyticsRangeQueryDto, { from: '2026-01-01', to: '2026-01-31' }),
+      await errors(AnalyticsRangeQueryDto, {
+        from: '2026-01-01',
+        to: '2026-01-31',
+      }),
     ).toEqual([]);
   });
 

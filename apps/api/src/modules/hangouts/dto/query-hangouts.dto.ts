@@ -12,7 +12,10 @@ export class HangoutListQueryDto extends PaginationQueryDto {
   @IsUUID('all')
   venueId?: string;
 
-  @ApiPropertyOptional({ format: 'date', description: 'Фільтр за датою (YYYY-MM-DD)' })
+  @ApiPropertyOptional({
+    format: 'date',
+    description: 'Фільтр за датою (YYYY-MM-DD)',
+  })
   @IsOptional()
   @IsISO8601({ strict: true })
   date?: string;
