@@ -27,7 +27,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { ReviewsService } from './reviews.service';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
-import { ReviewAdminQueryDto, ReviewListQueryDto } from './dto/query-reviews.dto';
+import {
+  ReviewAdminQueryDto,
+  ReviewListQueryDto,
+} from './dto/query-reviews.dto';
 import { Review } from './entities/review.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';

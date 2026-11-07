@@ -47,7 +47,10 @@ export class FavoritesController {
   })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  async add(@CurrentUser() u: JwtUser, @Param('venueId', ParseUuidPipe) id: string) {
+  async add(
+    @CurrentUser() u: JwtUser,
+    @Param('venueId', ParseUuidPipe) id: string,
+  ) {
     await this.favorites.add(u.sub, id);
     return { data: { venueId: id } };
   }
@@ -67,7 +70,10 @@ export class FavoritesController {
     },
   })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
-  async remove(@CurrentUser() u: JwtUser, @Param('venueId', ParseUuidPipe) id: string) {
+  async remove(
+    @CurrentUser() u: JwtUser,
+    @Param('venueId', ParseUuidPipe) id: string,
+  ) {
     await this.favorites.remove(u.sub, id);
     return { data: { venueId: id } };
   }

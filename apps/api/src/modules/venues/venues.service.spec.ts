@@ -314,7 +314,9 @@ describe('VenuesService', () => {
     );
     // Для КОЖНОГО запитаного коду свій EXISTS-підзапит (AND), а не один IN (OR)
     expect(
-      sqls.some((s: string) => s.includes('EXISTS') && s.includes('f2.code = :')),
+      sqls.some(
+        (s: string) => s.includes('EXISTS') && s.includes('f2.code = :'),
+      ),
     ).toBe(true);
     const andParams = mockQb.andWhere.mock.calls
       .flat()

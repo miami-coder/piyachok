@@ -91,7 +91,10 @@ export class AdminUsersController {
     description: 'Немає дозволу / не можна видалити себе',
   })
   @ApiNotFoundResponse({ description: 'Користувача не знайдено' })
-  softDelete(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
+  softDelete(
+    @CurrentUser() u: JwtUser,
+    @Param('id', ParseUuidPipe) id: string,
+  ) {
     return this.adminUsers.softDelete(u.sub, id);
   }
 

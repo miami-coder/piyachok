@@ -73,7 +73,10 @@ export class TopController {
   @Permissions('user:manage')
   @Patch('admin/top/categories/:id')
   @ApiOperation({ summary: 'Адмін: оновити категорію Топу' })
-  updateCategory(@Param('id', ParseUuidPipe) id: string, @Body() dto: UpdateTopCategoryDto) {
+  updateCategory(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() dto: UpdateTopCategoryDto,
+  ) {
     return this.top.updateCategory(id, dto).then((data) => ({ data }));
   }
 
@@ -92,7 +95,10 @@ export class TopController {
   @Permissions('user:manage')
   @Post('admin/top/categories/:id/entries')
   @ApiOperation({ summary: 'Адмін: додати заклад у категорію Топу' })
-  addEntry(@Param('id', ParseUuidPipe) id: string, @Body() dto: CreateTopEntryDto) {
+  addEntry(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() dto: CreateTopEntryDto,
+  ) {
     return this.top.addEntry(id, dto).then((data) => ({ data }));
   }
 

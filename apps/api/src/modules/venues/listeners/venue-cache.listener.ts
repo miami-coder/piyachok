@@ -5,7 +5,6 @@ import { VENUE_CREATED, VENUE_UPDATED, VENUE_STATUS_CHANGED } from '../events';
 
 @Injectable()
 export class VenueCacheListener {
-
   constructor(private readonly venues: VenuesService) {}
 
   @OnEvent(VENUE_CREATED)

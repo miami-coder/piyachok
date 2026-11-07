@@ -77,9 +77,12 @@ describe('HangoutsController', () => {
 
   it('myList delegates to listMine with role and wraps in data', async () => {
     hangouts.listMine.mockResolvedValue([{ id: 'h1' }]);
-    const res = await controller.myList({ sub: 'u1' } as any, {
-      role: 'created',
-    } as any);
+    const res = await controller.myList(
+      { sub: 'u1' } as any,
+      {
+        role: 'created',
+      } as any,
+    );
     expect(hangouts.listMine).toHaveBeenCalledWith('u1', 'created');
     expect(res.data[0].id).toBe('h1');
   });

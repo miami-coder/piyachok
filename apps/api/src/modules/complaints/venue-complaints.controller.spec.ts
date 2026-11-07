@@ -12,7 +12,9 @@ describe('VenueComplaintsController', () => {
   let perms: any;
 
   beforeEach(async () => {
-    complaints = { listForVenue: jest.fn().mockResolvedValue({ data: [], meta: undefined }) };
+    complaints = {
+      listForVenue: jest.fn().mockResolvedValue({ data: [], meta: undefined }),
+    };
     venues = { findOneOrThrow: jest.fn() };
     perms = { hasPermission: jest.fn() };
     const module = await Test.createTestingModule({
@@ -29,8 +31,14 @@ describe('VenueComplaintsController', () => {
   it('власник закладу бачить скарги свого закладу', async () => {
     perms.hasPermission.mockResolvedValue(false);
     venues.findOneOrThrow.mockResolvedValue({ ownerId: 'u1' });
-    complaints.listForVenue.mockResolvedValue({ data: [{ id: 'c1' }], meta: { total: 1 } });
-    const res = await controller.list({ sub: 'u1' } as any, 'v1', { page: 1, limit: 20 } as any);
+    complaints.listForVenue.mockResolvedValue({
+      data: [{ id: 'c1' }],
+      meta: { total: 1 },
+    });
+    const res = await controller.list({ sub: 'u1' } as any, 'v1', {
+      page: 1,
+      limit: 20,
+    } as any);
     expect(venues.findOneOrThrow).toHaveBeenCalledWith('v1');
     expect(complaints.listForVenue).toHaveBeenCalledWith('v1', 1, 20);
     expect(res.data).toEqual([{ id: 'c1' }]);
@@ -41,14 +49,21 @@ describe('VenueComplaintsController', () => {
     await controller.list({ sub: 'sa' } as any, 'v1', {} as any);
     expect(venues.findOneOrThrow).not.toHaveBeenCalled();
     // дефолти page/limit тепер у сервісі (page = 1, limit = 20)
-    expect(complaints.listForVenue).toHaveBeenCalledWith('v1', undefined, undefined);
+    expect(complaints.listForVenue).toHaveBeenCalledWith(
+      'v1',
+      undefined,
+      undefined,
+    );
   });
 
   it('не-власник отримує 403 і listForVenue не викликається', async () => {
     perms.hasPermission.mockResolvedValue(false);
     venues.findOneOrThrow.mockResolvedValue({ ownerId: 'other' });
     await expect(
-      controller.list({ sub: 'u1' } as any, 'v1', { page: 1, limit: 20 } as any),
+      controller.list({ sub: 'u1' } as any, 'v1', {
+        page: 1,
+        limit: 20,
+      } as any),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(complaints.listForVenue).not.toHaveBeenCalled();
   });

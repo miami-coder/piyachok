@@ -20,7 +20,10 @@ describe('ReviewsController', () => {
       feature: jest.fn(),
       listForUser: jest.fn(),
     };
-    storage = { save: jest.fn(), remove: jest.fn().mockResolvedValue(undefined) };
+    storage = {
+      save: jest.fn(),
+      remove: jest.fn().mockResolvedValue(undefined),
+    };
     const module = await Test.createTestingModule({
       controllers: [ReviewsController],
       providers: [
@@ -49,8 +52,18 @@ describe('ReviewsController', () => {
     reviews.assertCanCreate.mockResolvedValue(undefined);
     reviews.create.mockResolvedValue({ id: 'r1' });
     storage.save.mockResolvedValue({ url: '/static/x.jpg', filename: 'x.jpg' });
-    const file = { originalname: 'a.jpg', mimetype: 'image/jpeg', size: 1, buffer: Buffer.alloc(1) } as any;
-    await controller.create({ sub: 'u1' } as any, 'v1', { rating: 5, text: 'ok' }, file);
+    const file = {
+      originalname: 'a.jpg',
+      mimetype: 'image/jpeg',
+      size: 1,
+      buffer: Buffer.alloc(1),
+    } as any;
+    await controller.create(
+      { sub: 'u1' } as any,
+      'v1',
+      { rating: 5, text: 'ok' },
+      file,
+    );
     expect(reviews.assertCanCreate).toHaveBeenCalledWith('u1', 'v1');
     expect(reviews.create).toHaveBeenCalledWith(
       'u1',
@@ -66,9 +79,19 @@ describe('ReviewsController', () => {
 
   it('create does not save the file when checks reject', async () => {
     reviews.assertCanCreate.mockRejectedValue(new Error('403'));
-    const file = { originalname: 'a.jpg', mimetype: 'image/jpeg', size: 1, buffer: Buffer.alloc(1) } as any;
+    const file = {
+      originalname: 'a.jpg',
+      mimetype: 'image/jpeg',
+      size: 1,
+      buffer: Buffer.alloc(1),
+    } as any;
     await expect(
-      controller.create({ sub: 'u1' } as any, 'v1', { rating: 5, text: 'ok' }, file),
+      controller.create(
+        { sub: 'u1' } as any,
+        'v1',
+        { rating: 5, text: 'ok' },
+        file,
+      ),
     ).rejects.toThrow('403');
     expect(storage.save).not.toHaveBeenCalled();
     expect(reviews.create).not.toHaveBeenCalled();
@@ -78,9 +101,19 @@ describe('ReviewsController', () => {
     reviews.assertCanCreate.mockResolvedValue(undefined);
     reviews.create.mockRejectedValue(new Error('409'));
     storage.save.mockResolvedValue({ url: '/static/x.jpg', filename: 'x.jpg' });
-    const file = { originalname: 'a.jpg', mimetype: 'image/jpeg', size: 1, buffer: Buffer.alloc(1) } as any;
+    const file = {
+      originalname: 'a.jpg',
+      mimetype: 'image/jpeg',
+      size: 1,
+      buffer: Buffer.alloc(1),
+    } as any;
     await expect(
-      controller.create({ sub: 'u1' } as any, 'v1', { rating: 5, text: 'ok' }, file),
+      controller.create(
+        { sub: 'u1' } as any,
+        'v1',
+        { rating: 5, text: 'ok' },
+        file,
+      ),
     ).rejects.toThrow('409');
     expect(storage.remove).toHaveBeenCalledWith('reviews/v1', 'x.jpg');
   });

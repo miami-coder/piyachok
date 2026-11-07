@@ -228,15 +228,9 @@ describe('ReviewsService — санітизація авторів відгук�
       .mockReturnValueOnce(qbBogus)
       .mockReturnValueOnce(qbEmpty);
     await service.listForVenue('v1', 1, 20, 'bogus' as never);
-    expect(qbBogus.lastAddOrderBy).toHaveBeenCalledWith(
-      'r.createdAt',
-      'DESC',
-    );
+    expect(qbBogus.lastAddOrderBy).toHaveBeenCalledWith('r.createdAt', 'DESC');
     await service.listForVenue('v1', 1, 20, '' as never);
-    expect(qbEmpty.lastAddOrderBy).toHaveBeenCalledWith(
-      'r.createdAt',
-      'DESC',
-    );
+    expect(qbEmpty.lastAddOrderBy).toHaveBeenCalledWith('r.createdAt', 'DESC');
   });
 
   it('listForVenue віддає автора без email/passwordHash/emailVerified/deletedAt', async () => {

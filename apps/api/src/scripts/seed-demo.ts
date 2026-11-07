@@ -37,17 +37,47 @@ import { VenueFeature } from '../modules/venues/entities/venue-feature.entity';
 import { VenueFeatureAssignment } from '../modules/venues/entities/venue-feature-assignment.entity';
 import { VenueStatus } from '../modules/venues/entities/venue.entity';
 import { Review } from '../modules/reviews/entities/review.entity';
-import { News, NewsCategory, NewsStatus } from '../modules/news/entities/news.entity';
-import { SEED_TAGS, SEED_VENUES, SEED_REVIEWS, SEED_NEWS } from './seed-demo-data';
+import {
+  News,
+  NewsCategory,
+  NewsStatus,
+} from '../modules/news/entities/news.entity';
+import {
+  SEED_TAGS,
+  SEED_VENUES,
+  SEED_REVIEWS,
+  SEED_NEWS,
+} from './seed-demo-data';
 import { Role } from '../modules/rbac/entities/role.entity';
 import { UserRole } from '../modules/rbac/entities/user-role.entity';
 
 const PASSWORD = 'User1234';
 const BCRYPT_COST = 12; // синхронно з users.service.register()
 const USERS = [
-  { key: 'user1', email: 'user1@gmail.com', firstname: 'Андрій', lastname: 'Мельник', phone: '+380674512309', age: 27 },
-  { key: 'user2', email: 'user2@gmail.com', firstname: 'Олег', lastname: 'Савчук', phone: '+380638922411', age: 31 },
-  { key: 'user3', email: 'user3@gmail.com', firstname: 'Тарас', lastname: 'Гнатюк', phone: '+380937115642', age: 29 },
+  {
+    key: 'user1',
+    email: 'user1@gmail.com',
+    firstname: 'Андрій',
+    lastname: 'Мельник',
+    phone: '+380674512309',
+    age: 27,
+  },
+  {
+    key: 'user2',
+    email: 'user2@gmail.com',
+    firstname: 'Олег',
+    lastname: 'Савчук',
+    phone: '+380638922411',
+    age: 31,
+  },
+  {
+    key: 'user3',
+    email: 'user3@gmail.com',
+    firstname: 'Тарас',
+    lastname: 'Гнатюк',
+    phone: '+380937115642',
+    age: 29,
+  },
 ];
 
 // Корінь, звідки копіюємо webp: SEED_ASSETS_DIR у .env / docker, дефолт — cwd (repo корінь backend)
@@ -65,7 +95,9 @@ async function main() {
   // --- 1. Юзери ---
   const users = new Map<string, string>(); // key -> id
   const passwordHash = await bcrypt.hash(PASSWORD, BCRYPT_COST);
-  const userRole = await ds.getRepository(Role).findOne({ where: { code: 'user' } });
+  const userRole = await ds
+    .getRepository(Role)
+    .findOne({ where: { code: 'user' } });
   if (!userRole)
     throw new Error(
       'Ролі user немає в базі — спершу прогоніть міграції (pnpm migration:run або сервіс `migrate`).',
@@ -76,13 +108,24 @@ async function main() {
     if (user && !user.deletedAt) {
       console.log(`Юзер ${u.email} існує — пропущено.`);
     } else if (user) {
-      await repo.update(user.id, { deletedAt: null, passwordHash, emailVerified: true });
+      await repo.update(user.id, {
+        deletedAt: null,
+        passwordHash,
+        emailVerified: true,
+      });
       console.log(`Юзер ${u.email} був soft-deleted — відновлено.`);
     } else {
-      user = await repo.save({ email: u.email, passwordHash, emailVerified: true });
+      user = await repo.save({
+        email: u.email,
+        passwordHash,
+        emailVerified: true,
+      });
       await ds.getRepository(Profile).save({
-        userId: user.id, firstname: u.firstname, lastname: u.lastname,
-        phone: u.phone, age: u.age,
+        userId: user.id,
+        firstname: u.firstname,
+        lastname: u.lastname,
+        phone: u.phone,
+        age: u.age,
       });
       console.log(`Юзер створено: ${u.email} (${u.firstname} ${u.lastname}).`);
     }
@@ -104,7 +147,9 @@ async function main() {
 
   // --- 2. Теги-довідник ---
   for (const t of SEED_TAGS) {
-    const known = await ds.getRepository(Tag).findOne({ where: { slug: t.slug } });
+    const known = await ds
+      .getRepository(Tag)
+      .findOne({ where: { slug: t.slug } });
     if (!known) {
       await ds.getRepository(Tag).insert(t);
       console.log(`Тег додано: #${t.slug} (${t.name}).`);
@@ -118,7 +163,8 @@ async function main() {
   let created = 0;
   for (const seed of SEED_VENUES) {
     const ownerId = users.get(seed.owner);
-    if (!ownerId) throw new Error(`Юзер ${seed.owner} не створився — припиняємо.`);
+    if (!ownerId)
+      throw new Error(`Юзер ${seed.owner} не створився — припиняємо.`);
     const exists = await ds.getRepository(Venue).findOne({
       where: { ownerId, name: seed.name, address: seed.address },
     });
@@ -136,7 +182,8 @@ async function main() {
       longitude: Number(seed.longitude),
       contacts: seed.contacts,
       workingHours: seed.workingHours,
-      averageCheck: seed.averageCheck != null ? Number(seed.averageCheck) : null,
+      averageCheck:
+        seed.averageCheck != null ? Number(seed.averageCheck) : null,
       status,
     });
 
@@ -150,10 +197,14 @@ async function main() {
         await fs.mkdir(dstDir, { recursive: true });
         await fs.copyFile(src, dst);
       } catch (e) {
-        console.warn(`⚠ Фото ${seed.photos[i]} не скопіювалося (${e instanceof Error ? e.message : e}) — URL все одно записано в БД.`);
+        console.warn(
+          `⚠ Фото ${seed.photos[i]} не скопіювалося (${e instanceof Error ? e.message : e}) — URL все одно записано в БД.`,
+        );
       }
       const url = `/static/venues/${venue.id}/photo-${i + 1}.webp`;
-      await ds.getRepository(VenuePhoto).insert({ venueId: venue.id, url, sortOrder: i });
+      await ds
+        .getRepository(VenuePhoto)
+        .insert({ venueId: venue.id, url, sortOrder: i });
       if (i === seed.mainPhotoIdx) {
         await ds.getRepository(Venue).update(venue.id, { mainPhotoUrl: url });
       }
@@ -162,18 +213,28 @@ async function main() {
     // Тип/фічі/теги — прив'язки з довідників
     const type = types.find((t) => t.slug === seed.type);
     if (type) {
-      await ds.getRepository(VenueTypeAssignment).insert({ venueId: venue.id, typeId: type.id });
+      await ds
+        .getRepository(VenueTypeAssignment)
+        .insert({ venueId: venue.id, typeId: type.id });
     }
     for (const code of seed.features) {
       const f = features.find((x) => x.code === code);
-      if (f) await ds.getRepository(VenueFeatureAssignment).insert({ venueId: venue.id, featureId: f.id });
+      if (f)
+        await ds
+          .getRepository(VenueFeatureAssignment)
+          .insert({ venueId: venue.id, featureId: f.id });
     }
     for (const slug of seed.tags) {
       const t = await ds.getRepository(Tag).findOne({ where: { slug } });
-      if (t) await ds.getRepository(VenueTag).insert({ venueId: venue.id, tagId: t.id });
+      if (t)
+        await ds
+          .getRepository(VenueTag)
+          .insert({ venueId: venue.id, tagId: t.id });
     }
     created++;
-    console.log(`Заклад створено: «${seed.name}» (${seed.type}, статус ${status}, фото ${seed.photos.length}).`);
+    console.log(
+      `Заклад створено: «${seed.name}» (${seed.type}, статус ${status}, фото ${seed.photos.length}).`,
+    );
   }
 
   // --- 3а. Роль venue_admin власникам апрувнутих закладів ---
@@ -186,14 +247,25 @@ async function main() {
   // Нюанс: при живому API кеш пермішенів у Redis (TTL 5 хв) може ще деякий
   // час віддавати старий набір — сід має доступу до Redis і не скінить його.
   if (status === VenueStatus.Approved) {
-    const venueAdminRole = await ds.getRepository(Role).findOne({ where: { code: 'venue_admin' } });
-    if (!venueAdminRole) throw new Error('Ролі venue_admin немає в базі — спершу прогоніть міграції.');
-    const approvedOwners = await ds.getRepository(Venue)
+    const venueAdminRole = await ds
+      .getRepository(Role)
+      .findOne({ where: { code: 'venue_admin' } });
+    if (!venueAdminRole)
+      throw new Error(
+        'Ролі venue_admin немає в базі — спершу прогоніть міграції.',
+      );
+    const approvedOwners = await ds
+      .getRepository(Venue)
       .createQueryBuilder('v')
       .select('DISTINCT v."ownerId"', 'ownerId')
       .where('v.status = :status', { status: VenueStatus.Approved })
       .getRawMany<{ ownerId: string }>();
-    const emailByOwnerId = new Map([...users.entries()].map(([key, id]) => [id, USERS.find((u) => u.key === key)!.email]));
+    const emailByOwnerId = new Map(
+      [...users.entries()].map(([key, id]) => [
+        id,
+        USERS.find((u) => u.key === key)!.email,
+      ]),
+    );
     for (const { ownerId } of approvedOwners) {
       const hasRole = await ds.getRepository(UserRole).findOne({
         where: { userId: ownerId, roleId: venueAdminRole.id },
@@ -204,7 +276,9 @@ async function main() {
         roleId: venueAdminRole.id,
         assignedBy: null,
       });
-      console.log(`  → роль venue_admin додана: ${emailByOwnerId.get(ownerId) ?? ownerId}`);
+      console.log(
+        `  → роль venue_admin додана: ${emailByOwnerId.get(ownerId) ?? ownerId}`,
+      );
     }
   }
 
@@ -212,18 +286,28 @@ async function main() {
   let reviewsCreated = 0;
   for (const r of SEED_REVIEWS) {
     const userId = users.get(r.user);
-    const venue = await ds.getRepository(Venue).findOne({ where: { name: r.venue } });
+    const venue = await ds
+      .getRepository(Venue)
+      .findOne({ where: { name: r.venue } });
     if (!userId || !venue) {
-      console.warn(`⚠ Відгук для «${r.venue}» пропущено — немає юзера/закладу.`);
+      console.warn(
+        `⚠ Відгук для «${r.venue}» пропущено — немає юзера/закладу.`,
+      );
       continue;
     }
-    const exists = await ds.getRepository(Review).findOne({ where: { venueId: venue.id, userId } });
+    const exists = await ds
+      .getRepository(Review)
+      .findOne({ where: { venueId: venue.id, userId } });
     if (exists) {
       console.log(`Відгук ${r.user} → «${r.venue}» існує — пропущено.`);
       continue;
     }
     await ds.getRepository(Review).insert({
-      venueId: venue.id, userId, rating: r.rating, text: r.text, checkPhotoUrl: null,
+      venueId: venue.id,
+      userId,
+      rating: r.rating,
+      text: r.text,
+      checkPhotoUrl: null,
     });
     reviewsCreated++;
     console.log(`Відгук додано: ${r.user} → «${r.venue}» (${r.rating}/5).`);
@@ -231,7 +315,8 @@ async function main() {
 
   // Перерахунок ratingAvg/ratingCount по всіх закладах, що мають відгуки
   // (та сама логіка, що ReviewsService.recalc — сід вставляє напряму в БД)
-  const aggregates = await ds.getRepository(Review)
+  const aggregates = await ds
+    .getRepository(Review)
     .createQueryBuilder('r')
     .select('r."venueId"', 'venueId')
     .addSelect('AVG(r.rating)', 'avg')
@@ -244,17 +329,22 @@ async function main() {
       ratingCount: Number(row.count),
     });
   }
-  if (aggregates.length) console.log(`Рейтинг перераховано для ${aggregates.length} закладів.`);
+  if (aggregates.length)
+    console.log(`Рейтинг перераховано для ${aggregates.length} закладів.`);
 
   // --- 5. Новини: по одній published на заклад, фото — реюзна webp з seed-assets ---
   let newsCreated = 0;
   for (const n of SEED_NEWS) {
-    const venue = await ds.getRepository(Venue).findOne({ where: { name: n.venue } });
+    const venue = await ds
+      .getRepository(Venue)
+      .findOne({ where: { name: n.venue } });
     if (!venue) {
       console.warn(`⚠ Новину для «${n.venue}» пропущено — закладу немає.`);
       continue;
     }
-    const exists = await ds.getRepository(News).findOne({ where: { venueId: venue.id, title: n.title } });
+    const exists = await ds
+      .getRepository(News)
+      .findOne({ where: { venueId: venue.id, title: n.title } });
     if (exists) {
       console.log(`Новина «${n.title}» (${n.venue}) існує — пропущено.`);
       continue;
@@ -267,10 +357,15 @@ async function main() {
       const dstDir = join(uploadsRoot(), 'news', newsId);
       try {
         await fs.mkdir(dstDir, { recursive: true });
-        await fs.copyFile(join(assetsRoot, photoPath), join(dstDir, 'photo.webp'));
+        await fs.copyFile(
+          join(assetsRoot, photoPath),
+          join(dstDir, 'photo.webp'),
+        );
         imageUrl = `/static/news/${newsId}/photo.webp`;
       } catch (e) {
-        console.warn(`⚠ Фото новини «${n.title}» не скопіювалося (${e instanceof Error ? e.message : e}) — новина без картинки.`);
+        console.warn(
+          `⚠ Фото новини «${n.title}» не скопіювалося (${e instanceof Error ? e.message : e}) — новина без картинки.`,
+        );
       }
     }
     await ds.getRepository(News).insert({
@@ -284,10 +379,14 @@ async function main() {
       publishedAt: new Date(),
     });
     newsCreated++;
-    console.log(`Новину додано: «${n.title}» → «${n.venue}»${imageUrl ? ' (з фото)' : ''}.`);
+    console.log(
+      `Новину додано: «${n.title}» → «${n.venue}»${imageUrl ? ' (з фото)' : ''}.`,
+    );
   }
 
-  console.log(`\nГотово: створено ${created} закладів (статус ${status}), ${reviewsCreated} відгуків, ${newsCreated} новин.`);
+  console.log(
+    `\nГотово: створено ${created} закладів (статус ${status}), ${reviewsCreated} відгуків, ${newsCreated} новин.`,
+  );
   console.log(`Юзери: ${USERS.map((u) => `${u.email}/User1234`).join(', ')}.`);
 }
 

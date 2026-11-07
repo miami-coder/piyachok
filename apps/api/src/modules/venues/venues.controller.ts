@@ -136,7 +136,10 @@ export class VenuesController {
       'Немає дозволу venue:recommend / чужа рекомендація (знімає лише автор)',
   })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
-  unrecommend(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
+  unrecommend(
+    @CurrentUser() u: JwtUser,
+    @Param('id', ParseUuidPipe) id: string,
+  ) {
     return this.venues.unrecommend(u.sub, id).then((v) => ({ data: v }));
   }
 

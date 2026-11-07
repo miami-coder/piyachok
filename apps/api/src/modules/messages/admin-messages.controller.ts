@@ -1,9 +1,16 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
-
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
@@ -64,7 +71,10 @@ export class AdminMessagesController {
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу user:manage' })
   @ApiNotFoundResponse({ description: 'Користувача не знайдено' })
-  sendSystem(@Param('id', ParseUuidPipe) userId: string, @Body() dto: SendMessageDto) {
+  sendSystem(
+    @Param('id', ParseUuidPipe) userId: string,
+    @Body() dto: SendMessageDto,
+  ) {
     return this.messages.sendSystem(userId, dto).then((data) => ({ data }));
   }
 }

@@ -161,7 +161,12 @@ describe('AnalyticsService.stats — діапазон дат', () => {
       ],
     }).compile();
     const service = module.get(AnalyticsService);
-    const res = await service.getForVenue('u1', 'v1', '2020-01-01', '2020-12-31');
+    const res = await service.getForVenue(
+      'u1',
+      'v1',
+      '2020-01-01',
+      '2020-12-31',
+    );
     // 2+3 з запиту у діапазоні; count(120) — глобальний — більше не юзається
     expect(res.totalViews).toBe(5);
     // останній день діапазону включно: < (to + 1 день), не <= to
@@ -268,7 +273,10 @@ describe('AnalyticsService.getForVenue — доступ (власник або �
           provide: getRepositoryToken(VenueView),
           useValue: { createQueryBuilder: jest.fn().mockReturnValue(viewsQb) },
         },
-        { provide: getRepositoryToken(Venue), useValue: { increment: jest.fn() } },
+        {
+          provide: getRepositoryToken(Venue),
+          useValue: { increment: jest.fn() },
+        },
         {
           provide: getRepositoryToken(AnalyticsEvent),
           useValue: { createQueryBuilder: jest.fn().mockReturnValue(viewsQb) },
@@ -284,7 +292,10 @@ describe('AnalyticsService.getForVenue — доступ (власник або �
   it('супер-адмін з analytics:view:all проходить без походу в базу за закладом', async () => {
     perms.hasPermission.mockResolvedValue(true);
     const res = await service.getForVenue('u1', 'v1');
-    expect(perms.hasPermission).toHaveBeenCalledWith('u1', 'analytics:view:all');
+    expect(perms.hasPermission).toHaveBeenCalledWith(
+      'u1',
+      'analytics:view:all',
+    );
     expect(venuesService.findOneOrThrow).not.toHaveBeenCalled();
     expect(res.totalViews).toBe(0);
   });

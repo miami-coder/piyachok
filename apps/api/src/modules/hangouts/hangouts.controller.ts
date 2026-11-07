@@ -35,7 +35,10 @@ import {
   ApiPaginatedResponse,
 } from '../../common/swagger/response-helpers';
 import { HangoutsService } from './hangouts.service';
-import { HangoutListQueryDto, MyHangoutsQueryDto } from './dto/query-hangouts.dto';
+import {
+  HangoutListQueryDto,
+  MyHangoutsQueryDto,
+} from './dto/query-hangouts.dto';
 import { Hangout } from './entities/hangout.entity';
 import { CreateHangoutDto } from './dto/create-hangout.dto';
 
