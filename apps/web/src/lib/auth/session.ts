@@ -41,6 +41,22 @@ export async function getSessionTokens(): Promise<SessionTokens | null> {
   return decodeTokens(store.get(SESSION_COOKIE)?.value)
 }
 
+// Читаємо exp із access-JWT без перевірки підпису: це НЕ межа безпеки — підпис і
+// права все одно перевіряє бекенд на /auth/me. Це сигнал proxy, чи сесія вже
+// прострочена й її треба продовжити через refresh, щоб SSR-рендер не побачив 401.
+export function isAccessStale(accessToken: string): boolean {
+  try {
+    const payloadB64 = accessToken.split('.')[1]
+    if (!payloadB64) return false
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString('utf8')) as { exp?: number }
+    if (typeof payload.exp !== 'number') return false
+    // Буфер 60с: токен має дожити не лише до proxy, а й до /auth/me у тому ж рендері
+    return payload.exp <= Date.now() / 1000 + 60
+  } catch {
+    return false
+  }
+}
+
 // Викликати ЛИШЕ в route handlers / server actions
 export async function setSessionCookie(tokens: SessionTokens): Promise<void> {
   const store = await cookies()

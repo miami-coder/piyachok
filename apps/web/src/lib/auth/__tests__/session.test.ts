@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { decodeTokens, encodeTokens, refreshTokens, sessionCookieOptions } from '@/lib/auth/session'
+import { decodeTokens, encodeTokens, isAccessStale, refreshTokens, sessionCookieOptions } from '@/lib/auth/session'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -37,5 +37,26 @@ describe('refreshTokens', () => {
   it('мережева помилка → null', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('network') }))
     expect(await refreshTokens('RT')).toBeNull()
+  })
+})
+
+describe('isAccessStale', () => {
+  const makeJwt = (exp: number) => {
+    const payload = Buffer.from(JSON.stringify({ sub: 'u1', exp })).toString('base64url')
+    return `hdr.${payload}.sig`
+  }
+  it('exp у майбутньому → не прострочений', () => {
+    expect(isAccessStale(makeJwt(Math.floor(Date.now() / 1000) + 3600))).toBe(false)
+  })
+  it('exp у минулому → прострочений', () => {
+    expect(isAccessStale(makeJwt(Math.floor(Date.now() / 1000) - 10))).toBe(true)
+  })
+  it('exp за хвилину → прострочений (буфер 60с)', () => {
+    expect(isAccessStale(makeJwt(Math.floor(Date.now() / 1000) + 30))).toBe(true)
+  })
+  it('без exp / не-JWT / кривий payload → не прострочений (не чіпаємо)', () => {
+    expect(isAccessStale(`hdr.${Buffer.from(JSON.stringify({ sub: 'u1' })).toString('base64url')}.sig`)).toBe(false)
+    expect(isAccessStale('not-a-jwt')).toBe(false)
+    expect(isAccessStale(`hdr.${Buffer.from('спроба').toString('base64url')}.sig`)).toBe(false)
   })
 })
