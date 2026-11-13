@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
-import { ProfileForm, type ProfileFields } from '@/components/features/account/profile-form'
+import { ProfileForm } from '@/components/features/account/profile-form'
+import { type ProfileFields } from '@/components/shared/use-profile-fields'
 import { getMyProfile } from '@/services/users.server'
 import { getSessionTokens } from '@/lib/auth/session'
 

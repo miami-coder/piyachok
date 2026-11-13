@@ -1,8 +1,10 @@
 'use client'
 
-// Острів «Профіль» на деталці адмін-юзера: патерн кабінетного ProfileForm,
-// але PATCH /admin/users/:id і без avatarUrl (UpdateProfileDto його не має).
-// Надсилаємо лише diff проти початкових значень; порожній diff → «Немає змін».
+// Острів «Профіль» на деталці адмін-юзера: поля у спільному
+// use-profile-fields (як у кабінетній ProfileForm), але сабміт свій —
+// diff проти початкових значень (порожній diff → «Немає змін») далі
+// PATCH /admin/users/:id. avatarUrl не рендеримо і не надсилаємо
+// (UpdateProfileDto його не має), хоча бекенд його в profile повертає.
 
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
@@ -11,22 +13,17 @@ import { Input } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 import { adminUpdateUser } from '@/services/users'
 import { ApiError } from '@/lib/api/parse'
-import { profileUpdateSchema } from '@/lib/validation/profile'
+import { useProfileFields } from '@/components/shared/use-profile-fields'
+import type { ProfileFields, ProfileUpdateValues } from '@/components/shared/use-profile-fields'
 
-interface ProfileFields {
-  firstname: string | null
-  lastname: string | null
-  phone: string | null
-  age: number | null
-}
-
-export function UserProfileForm({ userId, profile }: { userId: string; profile: ProfileFields | null }) {
+export function UserProfileForm({ userId, profile }: { userId: string; profile: Partial<ProfileFields> | null }) {
   const router = useRouter()
   const { toast } = useToast()
-  const [firstname, setFirstname] = useState(profile?.firstname ?? '')
-  const [lastname, setLastname] = useState(profile?.lastname ?? '')
-  const [phone, setPhone] = useState(profile?.phone ?? '')
-  const [age, setAge] = useState(profile?.age?.toString() ?? '')
+  const {
+    firstname, setFirstname, lastname, setLastname,
+    phone, setPhone, age, setAge,
+    buildCandidates, validate,
+  } = useProfileFields(profile)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -34,31 +31,24 @@ export function UserProfileForm({ userId, profile }: { userId: string; profile: 
     e.preventDefault()
     if (saving) return // in-flight гард
     setError(null)
-    // Порожні поля НЕ надсилаємо (як у кабінеті: DTO опційні, порожній рядок
-    // ламав би MinLength на бекенді) — тому «очищення» поля не летить
-    const candidates: Record<string, unknown> = {}
-    if (firstname.trim()) candidates.firstname = firstname
-    if (lastname.trim()) candidates.lastname = lastname
-    if (phone.trim()) candidates.phone = phone
-    if (age.trim()) candidates.age = Number(age)
-    const parsed = profileUpdateSchema.safeParse(candidates)
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Перевірте поля')
+    const result = validate(buildCandidates())
+    if (!result.ok) {
+      setError(result.message)
       return
     }
     // diff проти початкових значень: змінене — летить, незмінене — ні
-    const diff: Record<string, unknown> = {}
-    if (parsed.data.firstname !== undefined && parsed.data.firstname !== (profile?.firstname ?? null)) {
-      diff.firstname = parsed.data.firstname
+    const diff: ProfileUpdateValues = {}
+    if (result.data.firstname !== undefined && result.data.firstname !== (profile?.firstname ?? null)) {
+      diff.firstname = result.data.firstname
     }
-    if (parsed.data.lastname !== undefined && parsed.data.lastname !== (profile?.lastname ?? null)) {
-      diff.lastname = parsed.data.lastname
+    if (result.data.lastname !== undefined && result.data.lastname !== (profile?.lastname ?? null)) {
+      diff.lastname = result.data.lastname
     }
-    if (parsed.data.phone !== undefined && parsed.data.phone !== (profile?.phone ?? null)) {
-      diff.phone = parsed.data.phone
+    if (result.data.phone !== undefined && result.data.phone !== (profile?.phone ?? null)) {
+      diff.phone = result.data.phone
     }
-    if (parsed.data.age !== undefined && parsed.data.age !== (profile?.age ?? null)) {
-      diff.age = parsed.data.age
+    if (result.data.age !== undefined && result.data.age !== (profile?.age ?? null)) {
+      diff.age = result.data.age
     }
     if (Object.keys(diff).length === 0) {
       toast('Немає змін')
