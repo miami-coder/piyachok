@@ -111,10 +111,11 @@ export class VenuesAdminController {
   @ApiForbiddenResponse({ description: 'Немає дозволу user:manage' })
   @ApiNotFoundResponse({ description: 'Заклад або користувач не знайдено' })
   async assignOwner(
+    @CurrentUser() u: JwtUser,
     @Param('id', ParseUuidPipe) id: string,
     @Body('userId', ParseUuidPipe) userId: string,
   ) {
     await this.users.findById(userId); // кинуть NotFound, якщо користувача немає
-    return { data: await this.venues.assignOwner(id, userId) };
+    return { data: await this.venues.assignOwner(u.sub, id, userId) };
   }
 }

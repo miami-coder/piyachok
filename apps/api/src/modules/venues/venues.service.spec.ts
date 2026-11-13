@@ -416,6 +416,76 @@ describe('VenuesService', () => {
     expect(perms.invalidate).not.toHaveBeenCalled();
   });
 
+  describe('assignOwner', () => {
+    it('схваленому закладу — новому власнику ідемпотентно видається venue_admin + аудит з before/after', async () => {
+      venues.findOne.mockResolvedValueOnce({
+        id: 'v1',
+        ownerId: 'old',
+        status: VenueStatus.Approved,
+      });
+      roles.findOne.mockResolvedValueOnce({ id: 'r1', code: 'venue_admin' });
+      userRoles.findOne.mockResolvedValueOnce(null); // ролі ще нема
+      await service.assignOwner('admin1', 'v1', 'u1');
+      expect(venues.save).toHaveBeenCalledWith(
+        expect.objectContaining({ ownerId: 'u1' }),
+      );
+      expect(userRoles.save).toHaveBeenCalledWith({
+        userId: 'u1',
+        roleId: 'r1',
+      });
+      expect(perms.invalidate).toHaveBeenCalledWith('u1');
+      expect(audit.log).toHaveBeenCalledWith(
+        'admin1',
+        'venue_assign_owner',
+        'venue',
+        'v1',
+        { ownerId: 'old' },
+        { ownerId: 'u1', roleGranted: true },
+      );
+    });
+
+    it('pending-заклад — роль не видається (її видасть approve), у аудиті roleGranted: false', async () => {
+      venues.findOne.mockResolvedValueOnce({
+        id: 'v1',
+        ownerId: null,
+        status: VenueStatus.Pending,
+      });
+      await service.assignOwner('admin1', 'v1', 'u1');
+      expect(roles.findOne).not.toHaveBeenCalled();
+      expect(userRoles.save).not.toHaveBeenCalled();
+      expect(perms.invalidate).not.toHaveBeenCalled();
+      expect(audit.log).toHaveBeenCalledWith(
+        'admin1',
+        'venue_assign_owner',
+        'venue',
+        'v1',
+        null,
+        { ownerId: 'u1', roleGranted: false },
+      );
+    });
+
+    it('власник уже має роль — дублю не пишеться, roleGranted: false', async () => {
+      venues.findOne.mockResolvedValueOnce({
+        id: 'v1',
+        ownerId: 'old',
+        status: VenueStatus.Approved,
+      });
+      roles.findOne.mockResolvedValueOnce({ id: 'r1', code: 'venue_admin' });
+      userRoles.findOne.mockResolvedValueOnce({ userId: 'u1', roleId: 'r1' });
+      await service.assignOwner('admin1', 'v1', 'u1');
+      expect(userRoles.save).not.toHaveBeenCalled();
+      expect(perms.invalidate).not.toHaveBeenCalled();
+      expect(audit.log).toHaveBeenCalledWith(
+        'admin1',
+        'venue_assign_owner',
+        'venue',
+        'v1',
+        { ownerId: 'old' },
+        { ownerId: 'u1', roleGranted: false },
+      );
+    });
+  });
+
   it('softDelete кидає 403 для не-власника без права', async () => {
     venues.findOne.mockResolvedValueOnce({
       id: 'v1',

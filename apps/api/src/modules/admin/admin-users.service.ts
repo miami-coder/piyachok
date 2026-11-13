@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -13,6 +14,7 @@ import {
 import { User } from '../users/entities/user.entity';
 import { Profile } from '../users/entities/profile.entity';
 import { UserRole } from '../rbac/entities/user-role.entity';
+import { RoleCode } from '../rbac/entities/role.enum';
 import { Role } from '../rbac/entities/role.entity';
 import { AuditService } from './audit.service';
 import {
@@ -134,6 +136,25 @@ export class AdminUsersService {
       });
       this.events.emit(USER_ROLE_ADDED, { userId: id });
     } else {
+      // Захист: у системі має залишатися хоч один активний супер-адмін.
+      if (role.code === RoleCode.SuperAdmin) {
+        if (id === actorId) {
+          throw new ForbiddenException(
+            'Не можна зняти роль супер-адміна з самого себе',
+          );
+        }
+        const activeHolders = await this.userRoles
+          .createQueryBuilder('ur')
+          .innerJoin(User, 'u', 'u.id = ur.userId')
+          .where('ur.roleId = :roleId', { roleId: role.id })
+          .andWhere('u.deletedAt IS NULL')
+          .getCount();
+        if (activeHolders <= 1) {
+          throw new ConflictException(
+            'Не можна зняти роль останнього супер-адміна',
+          );
+        }
+      }
       await this.userRoles.delete({ userId: id, roleId: role.id });
       await this.audit.log(
         actorId,

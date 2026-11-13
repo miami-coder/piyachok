@@ -64,10 +64,8 @@ describe('VenuesAdminController', () => {
     expect(res.data.id).toBe('v1');
   });
 
-  it('assignOwner делегує у VenuesService.assignOwner (хак — прибрано)', async () => {
-    venues.assignOwner.mockResolvedValue({ id: 'v1', ownerId: 'u1' });
-    const res = await controller.assignOwner('v1', 'u1');
-    expect(venues.assignOwner).toHaveBeenCalledWith('v1', 'u1');
-    expect(res.data.ownerId).toBe('u1');
+  it('assignOwner делегує у VenuesService.assignOwner з актором', async () => {
+    await controller.assignOwner({ sub: 'a1' } as any, 'v1', 'u1');
+    expect(venues.assignOwner).toHaveBeenCalledWith('a1', 'v1', 'u1');
   });
 });

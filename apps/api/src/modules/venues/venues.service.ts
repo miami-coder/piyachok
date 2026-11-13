@@ -274,11 +274,31 @@ export class VenuesService {
   }
 
   /** Призначити власника (існування користувача перевіряє контролер через
-   *  UsersService). */
-  async assignOwner(venueId: string, userId: string): Promise<Venue> {
+   *  UsersService). Власник схваленого закладу ідемпотентно отримує
+   *  venue_admin (як в approve), операція фіксується в аудиті.
+   *  Попереднього власника не чіпаємо — ручні видачі ролей незалежні. */
+  async assignOwner(
+    actorId: string,
+    venueId: string,
+    userId: string,
+  ): Promise<Venue> {
     const venue = await this.findOneOrThrow(venueId);
+    const before = venue.ownerId;
     venue.ownerId = userId;
-    return this.venues.save(venue);
+    const saved = await this.venues.save(venue);
+    const roleGranted =
+      venue.status === VenueStatus.Approved
+        ? await this.grantVenueAdmin(userId)
+        : false;
+    await this.audit.log(
+      actorId,
+      'venue_assign_owner',
+      'venue',
+      venueId,
+      before ? { ownerId: before } : null,
+      { ownerId: userId, roleGranted },
+    );
+    return saved;
   }
 
   async softDelete(userId: string, venueId: string): Promise<void> {

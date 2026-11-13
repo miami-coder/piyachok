@@ -1,6 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AdminUsersService } from './admin-users.service';
 import { AuditService } from './audit.service';
@@ -281,6 +285,56 @@ describe('AdminUsersService', () => {
       await expect(
         service.assignRole('admin', 'u1', 'nope', 'add'),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    describe('захист ролі super_admin при знятті', () => {
+      function mockHolders(count: number) {
+        userRoles.createQueryBuilder = jest.fn().mockReturnValue({
+          innerJoin: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          getCount: jest.fn().mockResolvedValue(count),
+        });
+      }
+
+      it('не дає зняти super_admin з самого себе', async () => {
+        roles.findOne.mockResolvedValue({ id: 'r1', code: 'super_admin' });
+        await expect(
+          service.assignRole('admin', 'admin', 'super_admin', 'remove'),
+        ).rejects.toBeInstanceOf(ForbiddenException);
+        expect(userRoles.delete).not.toHaveBeenCalled();
+        expect(events.emit).not.toHaveBeenCalled();
+      });
+
+      it('не дає зняти super_admin з останнього активного власника', async () => {
+        roles.findOne.mockResolvedValue({ id: 'r1', code: 'super_admin' });
+        mockHolders(1);
+        await expect(
+          service.assignRole('admin', 'u2', 'super_admin', 'remove'),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(userRoles.delete).not.toHaveBeenCalled();
+        expect(events.emit).not.toHaveBeenCalled();
+      });
+
+      it('дає зняти super_admin, коли лишаються інші активні власники', async () => {
+        roles.findOne.mockResolvedValue({ id: 'r1', code: 'super_admin' });
+        mockHolders(2);
+        const res = await service.assignRole(
+          'admin',
+          'u2',
+          'super_admin',
+          'remove',
+        );
+        expect(res.data).toEqual({
+          id: 'u2',
+          roleCode: 'super_admin',
+          action: 'remove',
+        });
+        expect(userRoles.delete).toHaveBeenCalledWith({
+          userId: 'u2',
+          roleId: 'r1',
+        });
+      });
     });
   });
 });
