@@ -464,6 +464,24 @@ describe('HangoutsService — дата+час і видалення авторо
     ).rejects.toThrow(BadRequestException);
   });
 
+  // Взимку офсет Europe/Kyiv — +2: зустріч, що почнеться через півгодини,
+  // відсіювалась жорстким +03:00 (парсилось на годину раніше), хоч вона
+  // ще в майбутньому. Офсет тепер той самий, що й у базі.
+  it('create взимку за 25 хв до початку — ок', async () => {
+    const nowSpy = jest
+      .spyOn(Date, 'now')
+      .mockReturnValue(new Date('2026-01-15T19:35:00Z').getTime()); // 21:35 за Києвом
+    await expect(
+      service.create('u1', 'v1', {
+        date: '2026-01-15',
+        time: '22:00',
+        purpose: 'Майбутня зимова зустріч',
+        groupSize: 3,
+      }),
+    ).resolves.toBeDefined();
+    nowSpy.mockRestore();
+  });
+
   it('create на сьогодні 23:00 — ок', async () => {
     const today = new Date();
     const date = today.toISOString().slice(0, 10);

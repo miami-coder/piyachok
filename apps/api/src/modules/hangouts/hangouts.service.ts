@@ -20,6 +20,7 @@ import { CreateHangoutDto } from './dto/create-hangout.dto';
 import { VenuesService } from '../venues/venues.service';
 import { VenueStatus } from '../venues/entities/venue.entity';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
+import { kyivWallToUtc } from '../../common/utils/kyiv-time.util';
 import { CacheService } from '../../common/services/cache.service';
 import {
   buildMeta,
@@ -53,10 +54,11 @@ export class HangoutsService {
       );
     // Дата+час: «сьогодні о 00:01» — вже минуле, тільки
     // до початку дня перевірка це пропускала.
-    // Час вводиться за Києвом (контейнер у UTC): без явного офсета
-    // «сьогодні ввечері» парсилось як UTC і виглядало майбутнім.
-    // Україна не переводить годинник (UTC+3 цілодобово), тож офсет константний.
-    const at = new Date(`${dto.date}T${dto.time}:00+03:00`);
+    // Час вводиться за Києвом (контейнер у UTC): без зони «сьогодні ввечері»
+    // парсилось як UTC і виглядало майбутнім. Офсет для конкретної дати —
+    // за правилами IANA Europe/Kyiv, тими ж, що й AT TIME ZONE 'Europe/Kyiv'
+    // у кроні завершення: один джерело часу, влітку +3, взимку +2.
+    const at = kyivWallToUtc(dto.date, dto.time);
     if (Number.isNaN(at.getTime()) || at.getTime() < Date.now() - 60_000) {
       throw new BadRequestException(
         'Дата й час зустрічі мають бути у майбутньому',
