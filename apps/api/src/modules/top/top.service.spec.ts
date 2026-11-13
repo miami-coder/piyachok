@@ -153,6 +153,7 @@ describe('TopService (фіча «Топ закладів»)', () => {
     entries.createQueryBuilder.mockReturnValue({
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue([
         {
@@ -173,6 +174,24 @@ describe('TopService (фіча «Топ закладів»)', () => {
     });
     const res = await service.listPublic();
     expect(res[0].venues.map((v) => v.name)).toEqual(['A', 'B']);
+  });
+
+  it('listPublic: у запиті фільтрує заклади за статусом approved — архівований/відхилений у Топ не потрапить', async () => {
+    categories.find.mockResolvedValueOnce([
+      { id: 'c1', title: 'Т', position: 0 },
+    ]);
+    const qb = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([]),
+    };
+    entries.createQueryBuilder.mockReturnValue(qb);
+    await service.listPublic();
+    expect(qb.andWhere).toHaveBeenCalledWith('v.status = :status', {
+      status: 'approved',
+    });
   });
 
   it('reorderCategories: новий порядок — position = індекс у списку', async () => {

@@ -60,6 +60,9 @@ export class TopService {
       .createQueryBuilder('e')
       .leftJoinAndSelect('e.venue', 'v')
       .where('e.categoryId IN (:...ids)', { ids: cats.map((c) => c.id) })
+      // Показуємо лише схвалені заклади: запис Топу додається за статусом
+      // одноразово, а заклад потім можуть заархівувати/відхилити.
+      .andWhere('v.status = :status', { status: VenueStatus.Approved })
       .orderBy('e.position', 'ASC')
       .getMany();
     const sortedRows = rows.sort(TopService.byPositionThenCreated);
