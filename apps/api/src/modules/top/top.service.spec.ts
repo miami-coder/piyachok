@@ -9,12 +9,13 @@ import { TopService } from './top.service';
 import { TopCategory } from './top-category.entity';
 import { TopEntry } from './top-entry.entity';
 import { Venue } from '../venues/entities/venue.entity';
+import { VenuesService } from '../venues/venues.service';
 
 describe('TopService (фіча «Топ закладів»)', () => {
   let service: TopService;
   let categories: any;
   let entries: any;
-  let venues: any;
+  let venuesService: any;
 
   beforeEach(async () => {
     categories = {
@@ -32,15 +33,19 @@ describe('TopService (фіча «Топ закладів»)', () => {
       find: jest.fn().mockResolvedValue([]),
       createQueryBuilder: jest.fn(),
     };
-    venues = {
-      findOne: jest.fn().mockResolvedValue({ id: 'v1', status: 'approved' }),
+    // Спільна перевірка venues.service: успіх = схвалений заклад,
+    // несхвалений/неіснуючий = 404.
+    venuesService = {
+      findByIdApprovedOrThrow: jest
+        .fn()
+        .mockResolvedValue({ id: 'v1', status: 'approved' }),
     };
     const module = await Test.createTestingModule({
       providers: [
         TopService,
         { provide: getRepositoryToken(TopCategory), useValue: categories },
         { provide: getRepositoryToken(TopEntry), useValue: entries },
-        { provide: getRepositoryToken(Venue), useValue: venues },
+        { provide: VenuesService, useValue: venuesService },
       ],
     }).compile();
     service = module.get(TopService);
@@ -54,11 +59,13 @@ describe('TopService (фіча «Топ закладів»)', () => {
     expect(c.position).toBe(0);
   });
 
-  it('addEntry: pending-заклад → 409 «лише схвалені»', async () => {
+  it('addEntry: pending-заклад → 404 (маска «не знайдено»)', async () => {
     categories.findOne.mockResolvedValueOnce({ id: 'c1' });
-    venues.findOne.mockResolvedValueOnce({ id: 'v1', status: 'pending' });
+    venuesService.findByIdApprovedOrThrow.mockRejectedValueOnce(
+      new NotFoundException('Заклад не знайдено'),
+    );
     await expect(service.addEntry('c1', { venueId: 'v1' })).rejects.toThrow(
-      ConflictException,
+      NotFoundException,
     );
     expect(entries.save).not.toHaveBeenCalled();
   });

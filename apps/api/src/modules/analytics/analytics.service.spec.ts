@@ -48,6 +48,10 @@ describe('AnalyticsService', () => {
       findOneOrThrow: jest
         .fn()
         .mockResolvedValue({ id: 'v1', status: 'approved' }),
+      // Спільна перевірка venues.service: несхвалений/неіснуючий = 404.
+      findByIdApprovedOrThrow: jest
+        .fn()
+        .mockResolvedValue({ id: 'v1', status: 'approved' }),
     };
     const module = await Test.createTestingModule({
       providers: [
@@ -111,7 +115,7 @@ describe('AnalyticsService', () => {
   });
 
   it('recordView неіснуючого закладу — 404, запису і дедуп-ключа немає', async () => {
-    venuesService.findOneOrThrow.mockRejectedValue(
+    venuesService.findByIdApprovedOrThrow.mockRejectedValue(
       new NotFoundException('Заклад не знайдено'),
     );
     await expect(service.recordView('v-ghost', 'u1')).rejects.toThrow(
@@ -123,10 +127,9 @@ describe('AnalyticsService', () => {
   });
 
   it('recordView несхваленого закладу — 404, як на публічному читанні', async () => {
-    venuesService.findOneOrThrow.mockResolvedValue({
-      id: 'v1',
-      status: 'pending',
-    });
+    venuesService.findByIdApprovedOrThrow.mockRejectedValue(
+      new NotFoundException('Заклад не знайдено'),
+    );
     await expect(service.recordView('v1', 'u1')).rejects.toThrow(
       'Заклад не знайдено',
     );
@@ -251,6 +254,9 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
             findOneOrThrow: jest
               .fn()
               .mockResolvedValue({ id: 'v1', status: 'approved' }),
+            findByIdApprovedOrThrow: jest
+              .fn()
+              .mockResolvedValue({ id: 'v1', status: 'approved' }),
           },
         },
         {
@@ -290,6 +296,9 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
           provide: VenuesService,
           useValue: {
             findOneOrThrow: jest
+              .fn()
+              .mockResolvedValue({ id: 'v1', status: 'approved' }),
+            findByIdApprovedOrThrow: jest
               .fn()
               .mockResolvedValue({ id: 'v1', status: 'approved' }),
           },

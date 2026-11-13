@@ -1,12 +1,9 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Favorite } from './entities/favorite.entity';
-import { Venue, VenueStatus } from '../venues/entities/venue.entity';
+import { Venue } from '../venues/entities/venue.entity';
+import { VenuesService } from '../venues/venues.service';
 import {
   buildMeta,
   normalizePagination,
@@ -18,10 +15,12 @@ export class FavoritesService {
     @InjectRepository(Favorite)
     private readonly favorites: Repository<Favorite>,
     @InjectRepository(Venue) private readonly venues: Repository<Venue>,
+    private readonly venuesService: VenuesService,
   ) {}
 
   async add(userId: string, venueId: string): Promise<void> {
-    await this.assertVenue(venueId);
+    // Правило «заклад схвалений» — спільна перевірка venues.service.
+    await this.venuesService.findByIdApprovedOrThrow(venueId);
     const existing = await this.favorites.findOne({
       where: { userId, venueId },
     });
@@ -63,14 +62,5 @@ export class FavoritesService {
       })
       .filter((d): d is NonNullable<typeof d> => d !== null);
     return { data, meta: buildMeta({ page, limit, offset }, total) };
-  }
-
-  private async assertVenue(venueId: string) {
-    const v = await this.venues.findOne({ where: { id: venueId } });
-    if (!v) throw new NotFoundException('Заклад не знайдено');
-    if (v.status !== VenueStatus.Approved)
-      throw new ForbiddenException(
-        'Можна додавати в улюблене лише схвалені заклади',
-      );
   }
 }

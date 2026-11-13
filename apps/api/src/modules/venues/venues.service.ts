@@ -318,6 +318,21 @@ export class VenuesService {
     return venue;
   }
 
+  /**
+   * Єдине правило API «дії та публічне читання — лише зі схваленими
+   * закладами»: неіснуючий або несхвалений заклад для клієнта виглядає
+   * як неіснуючий (404), бо його немає в публічних списках.
+   */
+  async findByIdApprovedOrThrow(
+    id: string,
+    notFoundMessage = 'Заклад не знайдено',
+  ): Promise<Venue> {
+    const venue = await this.findOneOrThrow(id);
+    if (venue.status !== VenueStatus.Approved)
+      throw new NotFoundException(notFoundMessage);
+    return venue;
+  }
+
   async findOnePublic(id: string): Promise<Venue> {
     const venue = await this.venues
       .createQueryBuilder('v')
@@ -360,9 +375,7 @@ export class VenuesService {
   async recommend(userId: string, venueId: string): Promise<Venue> {
     if (!(await this.perms.hasPermission(userId, 'venue:recommend')))
       throw new ForbiddenException('Немає дозволу venue:recommend');
-    const venue = await this.findOneOrThrow(venueId);
-    if (venue.status !== VenueStatus.Approved)
-      throw new ForbiddenException('Рекомендувати можна лише схвалені заклади');
+    const venue = await this.findByIdApprovedOrThrow(venueId);
     venue.recommendedBy = userId;
     venue.recommendedAt = new Date();
     const saved = await this.venues.save(venue);

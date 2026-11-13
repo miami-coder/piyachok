@@ -684,14 +684,14 @@ describe('VenuesService', () => {
       expect(venues.save).not.toHaveBeenCalled();
     });
 
-    it('recommend кидає 403 для не-схваленого закладу', async () => {
+    it('recommend кидає 404 для не-схваленого закладу (маска «не знайдено»)', async () => {
       venues.findOne.mockResolvedValueOnce({
         ...approved,
         status: VenueStatus.Pending,
       });
       perms.hasPermission.mockResolvedValueOnce(true);
       await expect(service.recommend('u-critic', 'v1')).rejects.toThrow(
-        ForbiddenException,
+        NotFoundException,
       );
       expect(venues.save).not.toHaveBeenCalled();
     });

@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  NotFoundException,
 } from '@nestjs/common';
 import { HangoutsService } from './hangouts.service';
 import { Hangout, HangoutStatus } from './entities/hangout.entity';
@@ -63,7 +64,8 @@ describe('HangoutsService', () => {
       count: jest.fn().mockResolvedValue(0),
     };
     venues = {
-      findOneOrThrow: jest
+      // Спільна перевірка venues.service: несхвалений/неіснуючий = 404.
+      findByIdApprovedOrThrow: jest
         .fn()
         .mockResolvedValue({ id: 'v1', status: 'approved' }),
     };
@@ -359,7 +361,7 @@ describe('HangoutsService.listPublic — кеш-хіт сторінок', () => 
   });
 });
 
-describe('HangoutsService.create — лише схвалені заклади', () => {
+describe('HangoutsService.create — лише схвалені заклади (404-маска)', () => {
   let service: HangoutsService;
   let hangouts: any;
   let venues: any;
@@ -375,9 +377,9 @@ describe('HangoutsService.create — лише схвалені заклади', 
     };
     participants = { save: jest.fn() };
     venues = {
-      findOneOrThrow: jest
+      findByIdApprovedOrThrow: jest
         .fn()
-        .mockResolvedValue({ id: 'v1', status: 'pending' }),
+        .mockRejectedValue(new NotFoundException('Заклад не знайдено')),
     };
     cache = { get: jest.fn(), set: jest.fn(), delByPattern: jest.fn() };
     events = { emit: jest.fn() };
@@ -406,7 +408,7 @@ describe('HangoutsService.create — лише схвалені заклади', 
   // create — теж мутація стрічки: без скиду кешу новий запит на /hangouts
   // не видний до кінця TTL кешу
   it('create → скидає кеш списку пиячів (delByPattern hangouts:list:*)', async () => {
-    venues.findOneOrThrow.mockResolvedValueOnce({
+    venues.findByIdApprovedOrThrow.mockResolvedValueOnce({
       id: 'v1',
       status: 'approved',
     });
@@ -419,7 +421,7 @@ describe('HangoutsService.create — лише схвалені заклади', 
     expect(cache.delByPattern).toHaveBeenCalledWith('hangouts:list:*');
   });
 
-  it('create пиячок на pending-заклад → ForbiddenException', async () => {
+  it('create пиячок на pending-заклад → 404', async () => {
     await expect(
       service.create('u1', 'v1', {
         date: futureDate(),
@@ -427,14 +429,10 @@ describe('HangoutsService.create — лише схвалені заклади', 
         purpose: 'Пива',
         groupSize: 3,
       }),
-    ).rejects.toThrow(ForbiddenException);
+    ).rejects.toThrow(NotFoundException);
   });
 
-  it('create пиячок на archived-заклад → ForbiddenException', async () => {
-    venues.findOneOrThrow.mockResolvedValueOnce({
-      id: 'v1',
-      status: 'archived',
-    });
+  it('create пиячок на archived-заклад → 404', async () => {
     await expect(
       service.create('u1', 'v1', {
         date: futureDate(),
@@ -442,11 +440,11 @@ describe('HangoutsService.create — лише схвалені заклади', 
         purpose: 'Пива',
         groupSize: 3,
       }),
-    ).rejects.toThrow(ForbiddenException);
+    ).rejects.toThrow(NotFoundException);
   });
 
   it('create на approved — ок', async () => {
-    venues.findOneOrThrow.mockResolvedValueOnce({
+    venues.findByIdApprovedOrThrow.mockResolvedValueOnce({
       id: 'v1',
       status: 'approved',
     });
@@ -544,7 +542,7 @@ describe('HangoutsService — дата+час і видалення авторо
     };
     participants = { save: jest.fn(), delete: jest.fn(), count: jest.fn() };
     venues = {
-      findOneOrThrow: jest
+      findByIdApprovedOrThrow: jest
         .fn()
         .mockResolvedValue({ id: 'v1', status: 'approved' }),
       createQueryBuilder: jest.fn(),

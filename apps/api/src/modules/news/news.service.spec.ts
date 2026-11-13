@@ -157,7 +157,13 @@ describe('NewsService — видимість новин і «просунути�
         getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       }),
     };
-    venues = { findOneOrThrow: jest.fn() };
+    venues = {
+      findOneOrThrow: jest.fn(),
+      // Спільна перевірка venues.service: несхвалений/неіснуючий = 404.
+      findByIdApprovedOrThrow: jest
+        .fn()
+        .mockRejectedValue(new NotFoundException('Новину не знайдено')),
+    };
     perms = { hasPermission: jest.fn().mockResolvedValue(false) };
     const module = await Test.createTestingModule({
       providers: [
@@ -182,10 +188,9 @@ describe('NewsService — видимість новин і «просунути�
       status: 'published',
       venueId: 'v1',
     });
-    venues.findOneOrThrow.mockResolvedValueOnce({
-      id: 'v1',
-      status: 'pending',
-    });
+    venues.findByIdApprovedOrThrow.mockRejectedValueOnce(
+      new NotFoundException('Новину не знайдено'),
+    );
     await expect(service.getPublic('n1')).rejects.toThrow(NotFoundException);
   });
 
@@ -195,7 +200,7 @@ describe('NewsService — видимість новин і «просунути�
       status: 'published',
       venueId: 'v1',
     });
-    venues.findOneOrThrow.mockResolvedValueOnce({
+    venues.findByIdApprovedOrThrow.mockResolvedValueOnce({
       id: 'v1',
       status: 'approved',
     });

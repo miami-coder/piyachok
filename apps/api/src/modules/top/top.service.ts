@@ -8,7 +8,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { TopCategory } from './top-category.entity';
 import { TopEntry } from './top-entry.entity';
-import { Venue, VenueStatus } from '../venues/entities/venue.entity';
+import { VenueStatus } from '../venues/entities/venue.entity';
+import { VenuesService } from '../venues/venues.service';
 
 export interface CreateTopCategoryDto {
   title: string;
@@ -27,7 +28,7 @@ export class TopService {
     private readonly categories: Repository<TopCategory>,
     @InjectRepository(TopEntry)
     private readonly entries: Repository<TopEntry>,
-    @InjectRepository(Venue) private readonly venues: Repository<Venue>,
+    private readonly venuesService: VenuesService,
   ) {}
 
   /** Детерміновий сорт: position → createdAt. Усі записи/категорії без
@@ -124,10 +125,7 @@ export class TopService {
   ): Promise<TopEntry> {
     const cat = await this.categories.findOne({ where: { id: categoryId } });
     if (!cat) throw new NotFoundException('Категорію не знайдено');
-    const venue = await this.venues.findOne({ where: { id: dto.venueId } });
-    if (!venue) throw new NotFoundException('Заклад не знайдено');
-    if (venue.status !== VenueStatus.Approved)
-      throw new ConflictException('У Топ можна додавати лише схвалені заклади');
+    await this.venuesService.findByIdApprovedOrThrow(dto.venueId);
     const dupe = await this.entries.findOne({
       where: { categoryId, venueId: dto.venueId },
     });

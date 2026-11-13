@@ -8,10 +8,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
 import { Review } from './entities/review.entity';
-import { Venue, VenueStatus } from '../venues/entities/venue.entity';
+import { Venue } from '../venues/entities/venue.entity';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { PermissionsService } from '../rbac/permissions.service';
+import { VenuesService } from '../venues/venues.service';
 import { REVIEW_CREATED, REVIEW_DELETED, REVIEW_UPDATED } from './events';
 import {
   buildMeta,
@@ -32,6 +33,7 @@ export class ReviewsService {
   constructor(
     @InjectRepository(Review) private readonly reviews: Repository<Review>,
     @InjectRepository(Venue) private readonly venues: Repository<Venue>,
+    private readonly venuesService: VenuesService,
     private readonly perms: PermissionsService,
     private readonly events: EventEmitter2,
   ) {}
@@ -40,12 +42,7 @@ export class ReviewsService {
    *  заклад існує, схвалений, не власний, дубліката немає.
    *  Викликається до будь-яких побічних ефектів (збереження файла). */
   async assertCanCreate(userId: string, venueId: string): Promise<void> {
-    const venue = await this.venues.findOne({ where: { id: venueId } });
-    if (!venue) throw new NotFoundException('Заклад не знайдено');
-    if (venue.status !== VenueStatus.Approved)
-      throw new ForbiddenException(
-        'Можна лишати відгуки лише на схвалені заклади',
-      );
+    const venue = await this.venuesService.findByIdApprovedOrThrow(venueId);
     if (venue.ownerId === userId)
       throw new ForbiddenException(
         'Не можна залишати відгук на власний заклад',

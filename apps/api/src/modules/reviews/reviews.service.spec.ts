@@ -9,6 +9,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ReviewsService } from './reviews.service';
 import { Review } from './entities/review.entity';
 import { Venue } from '../venues/entities/venue.entity';
+import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
 import type { SanitizedUser } from '../../common/utils/sanitize-user';
 
@@ -25,6 +26,7 @@ describe('ReviewsService', () => {
   let service: ReviewsService;
   let reviews: any;
   let venues: any;
+  let venuesService: any;
   let perms: any;
   let events: any;
 
@@ -37,6 +39,13 @@ describe('ReviewsService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
     };
     venues = { findOne: jest.fn(), update: jest.fn() };
+    // Спільна перевірка venues.service: успіх повертає заклад, несхвалений/
+    // неіснуючий кидає 404.
+    venuesService = {
+      findByIdApprovedOrThrow: jest
+        .fn()
+        .mockResolvedValue({ id: 'v1', ownerId: 'u9', status: 'approved' }),
+    };
     perms = { hasPermission: jest.fn() };
     events = { emit: jest.fn() };
     const module = await Test.createTestingModule({
@@ -44,6 +53,7 @@ describe('ReviewsService', () => {
         ReviewsService,
         { provide: getRepositoryToken(Review), useValue: reviews },
         { provide: getRepositoryToken(Venue), useValue: venues },
+        { provide: VenuesService, useValue: venuesService },
         { provide: PermissionsService, useValue: perms },
         { provide: EventEmitter2, useValue: events },
       ],
@@ -51,8 +61,10 @@ describe('ReviewsService', () => {
     service = module.get(ReviewsService);
   });
 
-  it('create throws 404 when venue missing', async () => {
-    venues.findOne.mockResolvedValueOnce(null);
+  it('create throws 404 when venue check fails (не існує або не схвалений)', async () => {
+    venuesService.findByIdApprovedOrThrow.mockRejectedValueOnce(
+      new NotFoundException('Заклад не знайдено'),
+    );
     await expect(
       service.create('u1', 'v1', {
         rating: 5,
@@ -62,7 +74,7 @@ describe('ReviewsService', () => {
   });
 
   it('create throws 403 when reviewer is the venue owner', async () => {
-    venues.findOne.mockResolvedValueOnce({
+    venuesService.findByIdApprovedOrThrow.mockResolvedValueOnce({
       id: 'v1',
       ownerId: 'u1',
       status: 'approved',
@@ -78,7 +90,6 @@ describe('ReviewsService', () => {
   });
 
   it('create throws 409 on duplicate review', async () => {
-    venues.findOne.mockResolvedValueOnce({ id: 'v1', status: 'approved' });
     reviews.findOne.mockResolvedValueOnce({ id: 'r1' });
     await expect(
       service.create('u1', 'v1', {
@@ -89,7 +100,6 @@ describe('ReviewsService', () => {
   });
 
   it('create saves and recalcs rating', async () => {
-    venues.findOne.mockResolvedValueOnce({ id: 'v1', status: 'approved' });
     reviews.findOne.mockResolvedValueOnce(null);
     reviews.save.mockResolvedValueOnce({ id: 'r-new' });
     const r = await service.create('u1', 'v1', {
@@ -199,6 +209,10 @@ describe('ReviewsService — санітизація авторів відгук�
         ReviewsService,
         { provide: getRepositoryToken(Review), useValue: reviews },
         { provide: getRepositoryToken(Venue), useValue: venues },
+        {
+          provide: VenuesService,
+          useValue: { findByIdApprovedOrThrow: jest.fn() },
+        },
         { provide: PermissionsService, useValue: perms },
         { provide: EventEmitter2, useValue: events },
       ],
@@ -262,10 +276,11 @@ describe('ReviewsService — санітизація авторів відгук�
   });
 });
 
-describe('ReviewsService.create — лише схвалені заклади', () => {
+describe('ReviewsService.create — лише схвалені заклади (404-маска)', () => {
   let service: ReviewsService;
   let reviews: any;
   let venues: any;
+  let venuesService: any;
   let perms: any;
   let events: any;
 
@@ -277,11 +292,13 @@ describe('ReviewsService.create — лише схвалені заклади', (
       delete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
     };
-    venues = {
-      findOne: jest
+    venues = { update: jest.fn() };
+    // Несхвалений (pending/archived) заклад виглядає як неіснуючий —
+    // правило venues.service.findByIdApprovedOrThrow.
+    venuesService = {
+      findByIdApprovedOrThrow: jest
         .fn()
-        .mockResolvedValue({ id: 'v1', ownerId: 'u9', status: 'pending' }),
-      update: jest.fn(),
+        .mockRejectedValue(new NotFoundException('Заклад не знайдено')),
     };
     perms = { hasPermission: jest.fn() };
     events = { emit: jest.fn() };
@@ -290,6 +307,7 @@ describe('ReviewsService.create — лише схвалені заклади', (
         ReviewsService,
         { provide: getRepositoryToken(Review), useValue: reviews },
         { provide: getRepositoryToken(Venue), useValue: venues },
+        { provide: VenuesService, useValue: venuesService },
         { provide: PermissionsService, useValue: perms },
         { provide: EventEmitter2, useValue: events },
       ],
@@ -297,31 +315,26 @@ describe('ReviewsService.create — лише схвалені заклади', (
     service = module.get(ReviewsService);
   });
 
-  it('create на pending-заклад → ForbiddenException', async () => {
+  it('create на pending-заклад → 404', async () => {
     await expect(
       service.create('u1', 'v1', {
         rating: 5,
         text: 'Супер заклад! Рекомендую',
       }),
-    ).rejects.toThrow(ForbiddenException);
+    ).rejects.toThrow(NotFoundException);
   });
 
-  it('create на archived-заклад → ForbiddenException', async () => {
-    venues.findOne.mockResolvedValueOnce({
-      id: 'v1',
-      ownerId: 'u9',
-      status: 'archived',
-    });
+  it('create на archived-заклад → 404', async () => {
     await expect(
       service.create('u1', 'v1', {
         rating: 5,
         text: 'Супер заклад! Рекомендую',
       }),
-    ).rejects.toThrow(ForbiddenException);
+    ).rejects.toThrow(NotFoundException);
   });
 
   it('create на approved — ок', async () => {
-    venues.findOne.mockResolvedValueOnce({
+    venuesService.findByIdApprovedOrThrow.mockResolvedValueOnce({
       ownerId: 'u9',
       id: 'v1',
       status: 'approved',
@@ -374,6 +387,10 @@ describe('ReviewsService.listForVenue — видалений автор', () => 
         {
           provide: getRepositoryToken(Venue),
           useValue: { findOne: jest.fn() },
+        },
+        {
+          provide: VenuesService,
+          useValue: { findByIdApprovedOrThrow: jest.fn() },
         },
         { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },

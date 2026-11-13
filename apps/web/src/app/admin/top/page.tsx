@@ -14,8 +14,9 @@ export const metadata = { title: 'Топ закладів — Адмінка' }
 export default async function AdminTopPage() {
   const tokens = await getSessionTokens()
   const categories = await getTopAdmin(tokens).catch(() => [])
-  // Дропдаун для додавання записів: схвалені заклади (бекенд 409-ить
-  // не-схвалені), за назвою у алфавітному порядку — до 100 (МАКС_ЛІМІТ бекенду).
+  // Дропдаун для додавання записів: схвалені заклади (на несхвалений
+  // бекенд відповідає 404 — «заклад не знайдено»), за назвою у алфавітному
+  // порядку — до 100 (МАКС_ЛІМІТ бекенду).
   const rawVenues = await getVenuesCatalog('limit=100&page=1').catch(
     () => ({ data: [] }),
   )

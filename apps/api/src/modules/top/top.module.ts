@@ -4,10 +4,10 @@ import { TopCategory } from './top-category.entity';
 import { TopEntry } from './top-entry.entity';
 import { TopService } from './top.service';
 import { TopController } from './top.controller';
-import { Venue } from '../venues/entities/venue.entity';
+import { VenuesModule } from '../venues/venues.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TopCategory, TopEntry, Venue])],
+  imports: [TypeOrmModule.forFeature([TopCategory, TopEntry]), VenuesModule],
   providers: [TopService],
   controllers: [TopController],
 })

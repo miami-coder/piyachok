@@ -1,13 +1,9 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VenueView } from './entities/venue-view.entity';
 import { AnalyticsEvent } from './entities/analytics-event.entity';
-import { Venue, VenueStatus } from '../venues/entities/venue.entity';
+import { Venue } from '../venues/entities/venue.entity';
 import { CacheService } from '../../common/services/cache.service';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
@@ -46,13 +42,10 @@ export class AnalyticsService {
     userId?: string | null,
     sessionId?: string | null,
   ): Promise<{ recorded: boolean }> {
-    // Перегляд буває тільки на публічній сторінці закладу: він має існувати
-    // і бути схваленим — інакше 404 так само, як на публічному читанні
-    // (findOnePublic несхвалені показує як «не знайдено»). Без цієї перевірки
+    // Перегляд буває тільки на публічній сторінці закладу: правило
+    // «заклад схвалений» — спільна перевірка venues.service. Без неї
     // FK на venue_views давав би 500 на неіснуючому id.
-    const venue = await this.venuesService.findOneOrThrow(venueId);
-    if (venue.status !== VenueStatus.Approved)
-      throw new NotFoundException('Заклад не знайдено');
+    await this.venuesService.findByIdApprovedOrThrow(venueId);
     const identity = userId ?? sessionId;
     if (!identity) return { recorded: false };
     const dedupKey = `view:dedup:${identity}:${venueId}`;

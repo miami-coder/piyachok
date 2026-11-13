@@ -159,9 +159,12 @@ export class NewsService {
     if (n.status !== NewsStatus.Published)
       throw new NotFoundException('Новину не знайдено');
     if (n.venueId) {
-      const venue = await this.venues.findOneOrThrow(n.venueId);
-      if (venue.status !== VenueStatus.Approved)
-        throw new NotFoundException('Новину не знайдено');
+      // Несхвалений заклад не «підтверджує» існування новини для клієнта —
+      // та сама маска 404, що й на публічному читанні закладу.
+      await this.venues.findByIdApprovedOrThrow(
+        n.venueId,
+        'Новину не знайдено',
+      );
     }
     return n;
   }
