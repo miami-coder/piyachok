@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { ComplaintsService } from './complaints.service';
@@ -11,10 +12,15 @@ import {
   ComplaintReason,
   ComplaintStatus,
 } from './entities/complaint.entity';
+import { VenuesService } from '../venues/venues.service';
+import { PermissionsService } from '../rbac/permissions.service';
+import { makePermsMock } from '../../testing/permissions-mock';
 
 describe('ComplaintsService', () => {
   let service: ComplaintsService;
   let complaints: any;
+  let venues: any;
+  let perms: any;
 
   beforeEach(async () => {
     complaints = {
@@ -24,10 +30,14 @@ describe('ComplaintsService', () => {
       findAndCount: jest.fn().mockResolvedValue([[], 0]),
       createQueryBuilder: jest.fn(),
     };
+    venues = { findOneOrThrow: jest.fn() };
+    perms = makePermsMock();
     const module = await Test.createTestingModule({
       providers: [
         ComplaintsService,
         { provide: getRepositoryToken(Complaint), useValue: complaints },
+        { provide: VenuesService, useValue: venues },
+        { provide: PermissionsService, useValue: perms },
       ],
     }).compile();
     service = module.get(ComplaintsService);
@@ -127,6 +137,31 @@ describe('ComplaintsService', () => {
       limit: 20,
       total: 1,
       hasMore: false,
+    });
+  });
+
+  describe('assertCanViewForVenue', () => {
+    it('complaint:manage пропускає без читання закладу', async () => {
+      perms.hasPermission.mockResolvedValueOnce(true);
+      await service.assertCanViewForVenue('a1', 'v1');
+      expect(venues.findOneOrThrow).not.toHaveBeenCalled();
+    });
+
+    it('власник закладу проходить', async () => {
+      perms.hasPermission.mockResolvedValueOnce(false);
+      venues.findOneOrThrow.mockResolvedValueOnce({ id: 'v1', ownerId: 'u1' });
+      await service.assertCanViewForVenue('u1', 'v1');
+    });
+
+    it('чужий заклад без права → Forbidden', async () => {
+      perms.hasPermission.mockResolvedValueOnce(false);
+      venues.findOneOrThrow.mockResolvedValueOnce({
+        id: 'v1',
+        ownerId: 'other',
+      });
+      await expect(service.assertCanViewForVenue('u1', 'v1')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 });

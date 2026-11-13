@@ -5,6 +5,7 @@ import { NewsService } from './news.service';
 import { News, NewsCategory, NewsStatus } from './entities/news.entity';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
+import { makePermsMock } from '../../testing/permissions-mock';
 import { FileStorageService } from '../../common/services/file-storage.service';
 
 describe('NewsService', () => {
@@ -29,7 +30,7 @@ describe('NewsService', () => {
       }),
     };
     venues = { findOneOrThrow: jest.fn() };
-    perms = { hasPermission: jest.fn() };
+    perms = makePermsMock();
     const module = await Test.createTestingModule({
       providers: [
         NewsService,
@@ -164,7 +165,8 @@ describe('NewsService — видимість новин і «просунути�
         .fn()
         .mockRejectedValue(new NotFoundException('Новину не знайдено')),
     };
-    perms = { hasPermission: jest.fn().mockResolvedValue(false) };
+    perms = makePermsMock();
+    perms.hasPermission.mockResolvedValue(false);
     const module = await Test.createTestingModule({
       providers: [
         NewsService,
@@ -260,7 +262,8 @@ describe('NewsService.listPublic — фільтр схованого закла�
       createQueryBuilder: jest.fn(),
     };
     venues = { findOneOrThrow: jest.fn() };
-    perms = { hasPermission: jest.fn().mockResolvedValue(false) };
+    perms = makePermsMock();
+    perms.hasPermission.mockResolvedValue(false);
     const module = await Test.createTestingModule({
       providers: [
         NewsService,
@@ -341,7 +344,7 @@ describe('NewsService.listMine — власник бачить свої нови
         NewsService,
         { provide: getRepositoryToken(News), useValue: news },
         { provide: VenuesService, useValue: venuesSrv },
-        { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
+        { provide: PermissionsService, useValue: makePermsMock() },
         { provide: FileStorageService, useValue: { save: jest.fn() } },
       ],
     }).compile();

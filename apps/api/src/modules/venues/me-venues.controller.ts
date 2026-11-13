@@ -1,11 +1,4 @@
-import {
-  Controller,
-  ForbiddenException,
-  Get,
-  NotFoundException,
-  Param,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -17,7 +10,6 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ParseUuidPipe } from '../../common/pipes/parse-uuid.pipe';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
-import { PermissionsService } from '../rbac/permissions.service';
 import { VenuesService } from './venues.service';
 import { Venue } from './entities/venue.entity';
 import {
@@ -30,10 +22,7 @@ import {
 @Controller('me')
 @UseGuards(JwtAuthGuard)
 export class MeVenuesController {
-  constructor(
-    private readonly venues: VenuesService,
-    private readonly perms: PermissionsService,
-  ) {}
+  constructor(private readonly venues: VenuesService) {}
 
   @Get('venues')
   @ApiOperation({ summary: 'Заклади поточного користувача (усі статуси)' })
@@ -65,13 +54,7 @@ export class MeVenuesController {
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   @ApiForbiddenResponse({ description: 'Немає доступу до цього закладу' })
   async get(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
-    const venue = await this.venues.findOneForOwnerQuery(id);
-    if (!venue) throw new NotFoundException('Заклад не знайдено');
-    if (venue.ownerId !== u.sub) {
-      const canAny = await this.perms.hasPermission(u.sub, 'venue:edit:any');
-      if (!canAny)
-        throw new ForbiddenException('Немає доступу до цього закладу');
-    }
+    const venue = await this.venues.getForOwnerOrAdmin(u.sub, id);
     return { data: venue };
   }
 }

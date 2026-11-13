@@ -199,9 +199,12 @@ export class MessagesService {
   }
 
   private async assertCanManageVenue(userId: string, venue: Venue) {
-    if (venue.ownerId === userId) return;
-    if (await this.perms.hasPermission(userId, 'venue:edit:any')) return;
-    throw new ForbiddenException('Немає доступу до повідомлень цього закладу');
+    await this.perms.assertOwnerOrPermission(
+      venue.ownerId,
+      userId,
+      'venue:edit:any',
+      'Немає доступу до повідомлень цього закладу',
+    );
   }
 
   private save(data: Partial<Message>) {

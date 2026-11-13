@@ -18,6 +18,7 @@ import { VenueTag } from './entities/venue-tag.entity';
 import { VenueType } from './entities/venue-type.entity';
 import { VenueTypeAssignment } from './entities/venue-type-assignment.entity';
 import { PermissionsService } from '../rbac/permissions.service';
+import { makePermsMock } from '../../testing/permissions-mock';
 import { FileStorageService } from '../../common/services/file-storage.service';
 
 function qb() {
@@ -78,7 +79,7 @@ describe('VenuesService', () => {
     venueTagsRepo = { save: jest.fn(), delete: jest.fn() };
     venueTypesRepo = { findOne: jest.fn() };
     venueTypeAssignmentsRepo = { save: jest.fn(), delete: jest.fn() };
-    perms = { hasPermission: jest.fn(), invalidate: jest.fn() };
+    perms = { ...makePermsMock(), invalidate: jest.fn() };
     catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn() };
@@ -365,6 +366,44 @@ describe('VenuesService', () => {
     );
   });
 
+  describe('getForOwnerOrAdmin', () => {
+    function chainWithVenue(venue: any) {
+      const chain = qb();
+      chain.getOne.mockResolvedValue(venue);
+      venues.createQueryBuilder.mockReturnValue(chain);
+      return chain;
+    }
+
+    it('власник бачить свій заклад у будь-якому статусі', async () => {
+      chainWithVenue({ id: 'v1', ownerId: 'u1', status: 'pending' });
+      const res = await service.getForOwnerOrAdmin('u1', 'v1');
+      expect(res.status).toBe('pending');
+      expect(perms.hasPermission).not.toHaveBeenCalled();
+    });
+
+    it('не-власник з venue:edit:any теж отримує заклад', async () => {
+      chainWithVenue({ id: 'v2', ownerId: 'other', status: 'rejected' });
+      perms.hasPermission.mockResolvedValueOnce(true);
+      const res = await service.getForOwnerOrAdmin('u1', 'v2');
+      expect(res.id).toBe('v2');
+    });
+
+    it('не-власник без права → Forbidden', async () => {
+      chainWithVenue({ id: 'v2', ownerId: 'other', status: 'approved' });
+      perms.hasPermission.mockResolvedValueOnce(false);
+      await expect(service.getForOwnerOrAdmin('u1', 'v2')).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('неіснуючий заклад → NotFound', async () => {
+      chainWithVenue(null);
+      await expect(service.getForOwnerOrAdmin('u1', 'nope')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('uploadPhoto', () => {
     const file = {
       originalname: 'a.png',
@@ -547,7 +586,8 @@ describe('VenuesService.findOnePublic — санітизація власник�
 
   beforeEach(async () => {
     photos = {};
-    perms = { hasPermission: jest.fn().mockResolvedValue(true) };
+    perms = makePermsMock();
+    perms.hasPermission.mockResolvedValue(true);
     catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };
@@ -630,7 +670,8 @@ describe('VenuesService — модерація закладів', () => {
   let events: any;
   let storage: any;
   beforeEach(async () => {
-    perms = { hasPermission: jest.fn().mockResolvedValue(false) };
+    perms = makePermsMock();
+    perms.hasPermission.mockResolvedValue(false);
     catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };

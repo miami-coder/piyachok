@@ -27,12 +27,12 @@ export class NewsService {
 
   async createForVenue(userId: string, venueId: string, dto: CreateNewsDto) {
     const venue = await this.venues.findOneOrThrow(venueId);
-    if (
-      venue.ownerId !== userId &&
-      !(await this.perms.hasPermission(userId, 'news:manage:any'))
-    ) {
-      throw new ForbiddenException('Не можна керувати новинами цього закладу');
-    }
+    await this.perms.assertOwnerOrPermission(
+      venue.ownerId,
+      userId,
+      'news:manage:any',
+      'Не можна керувати новинами цього закладу',
+    );
     return this.save(dto, venueId, userId);
   }
 
@@ -223,7 +223,13 @@ export class NewsService {
     if (!news.venueId)
       throw new ForbiddenException('Немає дозволу news:manage:any');
     const venue = await this.venues.findOneOrThrow(news.venueId);
-    if (venue.ownerId !== userId)
-      throw new ForbiddenException('Не можна керувати новинами цього закладу');
+    // право вже перевірено вище — тут вирішує только володіння закладом;
+    // повторний виклик hasPermission у хелпері б'є в кеш пермішенів
+    await this.perms.assertOwnerOrPermission(
+      venue.ownerId,
+      userId,
+      'news:manage:any',
+      'Не можна керувати новинами цього закладу',
+    );
   }
 }

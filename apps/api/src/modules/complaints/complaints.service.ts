@@ -9,6 +9,8 @@ import { In, Repository } from 'typeorm';
 import { Complaint, ComplaintStatus } from './entities/complaint.entity';
 import { CreateComplaintDto } from './dto/create-complaint.dto';
 import { ResolveComplaintDto } from './dto/resolve-complaint.dto';
+import { VenuesService } from '../venues/venues.service';
+import { PermissionsService } from '../rbac/permissions.service';
 import {
   buildMeta,
   normalizePagination,
@@ -19,6 +21,8 @@ export class ComplaintsService {
   constructor(
     @InjectRepository(Complaint)
     private readonly complaints: Repository<Complaint>,
+    private readonly venues: VenuesService,
+    private readonly perms: PermissionsService,
   ) {}
 
   async create(userId: string, dto: CreateComplaintDto) {
@@ -47,6 +51,20 @@ export class ComplaintsService {
       take: limit,
     });
     return { data, meta: buildMeta({ page, limit, offset }, total) };
+  }
+
+  /** Хто бачить скарги закладу — той, хто має complaint:manage, або його
+   *  власник. Перевірка живе тут, у сервісі, а не в контролері. */
+  async assertCanViewForVenue(userId: string, venueId: string): Promise<void> {
+    if (await this.perms.hasPermission(userId, 'complaint:manage')) return;
+    const venue = await this.venues.findOneOrThrow(venueId);
+    // право вже не пройшло вище — тут вирішує только володіння закладом
+    await this.perms.assertOwnerOrPermission(
+      venue.ownerId,
+      userId,
+      'complaint:manage',
+      'Немає доступу до скарг цього закладу',
+    );
   }
 
   /** Скарги до закладу для власника: ціль — сам заклад або відгук на нього. */

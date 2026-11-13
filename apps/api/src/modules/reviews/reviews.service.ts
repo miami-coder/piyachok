@@ -75,12 +75,12 @@ export class ReviewsService {
     dto: UpdateReviewDto,
   ): Promise<Review> {
     const review = await this.findOneOrThrow(reviewId);
-    if (
-      review.userId !== userId &&
-      !(await this.perms.hasPermission(userId, 'review:edit:any'))
-    ) {
-      throw new ForbiddenException('Не можна редагувати цей відгук');
-    }
+    await this.perms.assertOwnerOrPermission(
+      review.userId,
+      userId,
+      'review:edit:any',
+      'Не можна редагувати цей відгук',
+    );
     Object.assign(review, dto);
     await this.reviews.save(review);
     await this.recalc(review.venueId);
@@ -90,12 +90,12 @@ export class ReviewsService {
 
   async softDelete(userId: string, reviewId: string): Promise<void> {
     const review = await this.findOneOrThrow(reviewId);
-    if (
-      review.userId !== userId &&
-      !(await this.perms.hasPermission(userId, 'review:edit:any'))
-    ) {
-      throw new ForbiddenException('Не можна видалити цей відгук');
-    }
+    await this.perms.assertOwnerOrPermission(
+      review.userId,
+      userId,
+      'review:edit:any',
+      'Не можна видалити цей відгук',
+    );
     const venueId = review.venueId;
     await this.reviews.delete(reviewId);
     await this.recalc(venueId);

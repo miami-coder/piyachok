@@ -1,36 +1,33 @@
+// src/modules/complaints/venue-complaints.controller.spec.ts — контролер делегує в сервіс;
+// хто бачить скарги (власник або complaint:manage) тестується в complaints.service.spec.ts
+import { Reflector } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
-import { ForbiddenException } from '@nestjs/common';
 import { VenueComplaintsController } from './venue-complaints.controller';
 import { ComplaintsService } from './complaints.service';
-import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
+import { makePermsMock } from '../../testing/permissions-mock';
 
 describe('VenueComplaintsController', () => {
   let controller: VenueComplaintsController;
   let complaints: any;
-  let venues: any;
-  let perms: any;
 
   beforeEach(async () => {
     complaints = {
+      assertCanViewForVenue: jest.fn().mockResolvedValue(undefined),
       listForVenue: jest.fn().mockResolvedValue({ data: [], meta: undefined }),
     };
-    venues = { findOneOrThrow: jest.fn() };
-    perms = { hasPermission: jest.fn() };
     const module = await Test.createTestingModule({
       controllers: [VenueComplaintsController],
       providers: [
         { provide: ComplaintsService, useValue: complaints },
-        { provide: VenuesService, useValue: venues },
-        { provide: PermissionsService, useValue: perms },
+        { provide: PermissionsService, useValue: makePermsMock() },
+        Reflector,
       ],
     }).compile();
     controller = module.get(VenueComplaintsController);
   });
 
-  it('власник закладу бачить скарги свого закладу', async () => {
-    perms.hasPermission.mockResolvedValue(false);
-    venues.findOneOrThrow.mockResolvedValue({ ownerId: 'u1' });
+  it('перевірка доступу в сервісі, далі делегування listForVenue', async () => {
     complaints.listForVenue.mockResolvedValue({
       data: [{ id: 'c1' }],
       meta: { total: 1 },
@@ -39,32 +36,21 @@ describe('VenueComplaintsController', () => {
       page: 1,
       limit: 20,
     } as any);
-    expect(venues.findOneOrThrow).toHaveBeenCalledWith('v1');
+    expect(complaints.assertCanViewForVenue).toHaveBeenCalledWith('u1', 'v1');
     expect(complaints.listForVenue).toHaveBeenCalledWith('v1', 1, 20);
     expect(res.data).toEqual([{ id: 'c1' }]);
   });
 
-  it('супер-адмін (complaint:manage) бачить скарги без перевірки власності', async () => {
-    perms.hasPermission.mockResolvedValue(true);
-    await controller.list({ sub: 'sa' } as any, 'v1', {} as any);
-    expect(venues.findOneOrThrow).not.toHaveBeenCalled();
-    // дефолти page/limit тепер у сервісі (page = 1, limit = 20)
-    expect(complaints.listForVenue).toHaveBeenCalledWith(
-      'v1',
-      undefined,
-      undefined,
+  it('доступ не пройшов → помилка сервісу і listForVenue не викликається', async () => {
+    complaints.assertCanViewForVenue.mockRejectedValueOnce(
+      new Error('forbidden'),
     );
-  });
-
-  it('не-власник отримує 403 і listForVenue не викликається', async () => {
-    perms.hasPermission.mockResolvedValue(false);
-    venues.findOneOrThrow.mockResolvedValue({ ownerId: 'other' });
     await expect(
       controller.list({ sub: 'u1' } as any, 'v1', {
         page: 1,
         limit: 20,
       } as any),
-    ).rejects.toBeInstanceOf(ForbiddenException);
+    ).rejects.toThrow('forbidden');
     expect(complaints.listForVenue).not.toHaveBeenCalled();
   });
 });

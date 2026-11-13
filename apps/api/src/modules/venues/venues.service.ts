@@ -241,6 +241,20 @@ export class VenuesService {
     return saved;
   }
 
+  /** Свій заклад незалежно від статусу: власник або venue:edit:any.
+   *  Перевірка доступу живе в сервісі — контролер не знає про perms. */
+  async getForOwnerOrAdmin(userId: string, id: string): Promise<Venue> {
+    const venue = await this.findOneForOwnerQuery(id);
+    if (!venue) throw new NotFoundException('Заклад не знайдено');
+    await this.perms.assertOwnerOrPermission(
+      venue.ownerId,
+      userId,
+      'venue:edit:any',
+      'Немає доступу до цього закладу',
+    );
+    return venue;
+  }
+
   async findOneForOwnerQuery(id: string): Promise<Venue | null> {
     // Те саме насичення, що в search(): photos + features + tags + types.
     // Привʼязки (fa/vt/vta) обовʼязково з andSelect: без вибірки власних
@@ -302,9 +316,12 @@ export class VenuesService {
   }
 
   private async assertCanEdit(userId: string, venue: Venue) {
-    if (venue.ownerId === userId) return;
-    if (await this.perms.hasPermission(userId, 'venue:edit:any')) return;
-    throw new ForbiddenException('Не можна редагувати цей заклад');
+    await this.perms.assertOwnerOrPermission(
+      venue.ownerId,
+      userId,
+      'venue:edit:any',
+      'Не можна редагувати цей заклад',
+    );
   }
 
   // Завантаження фото: файл у storage + запис у venue_photos (без цього фото

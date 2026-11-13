@@ -10,6 +10,7 @@ import { ReviewsService } from './reviews.service';
 import { Review } from './entities/review.entity';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
+import { makePermsMock } from '../../testing/permissions-mock';
 import type { SanitizedUser } from '../../common/utils/sanitize-user';
 
 function qb() {
@@ -46,7 +47,7 @@ describe('ReviewsService', () => {
         .mockResolvedValue({ id: 'v1', ownerId: 'u9', status: 'approved' }),
       updateRatingStats: jest.fn().mockResolvedValue(undefined),
     };
-    perms = { hasPermission: jest.fn() };
+    perms = makePermsMock();
     events = { emit: jest.fn() };
     const module = await Test.createTestingModule({
       providers: [
@@ -199,7 +200,7 @@ describe('ReviewsService — санітизація авторів відгук�
       delete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
     };
-    perms = { hasPermission: jest.fn() };
+    perms = makePermsMock();
     events = { emit: jest.fn() };
     const module = await Test.createTestingModule({
       providers: [
@@ -298,7 +299,7 @@ describe('ReviewsService.create — лише схвалені заклади (40
         .mockRejectedValue(new NotFoundException('Заклад не знайдено')),
       updateRatingStats: jest.fn().mockResolvedValue(undefined),
     };
-    perms = { hasPermission: jest.fn() };
+    perms = makePermsMock();
     events = { emit: jest.fn() };
     const module = await Test.createTestingModule({
       providers: [
@@ -385,7 +386,7 @@ describe('ReviewsService.listForVenue — видалений автор', () => 
           provide: VenuesService,
           useValue: { findByIdApprovedOrThrow: jest.fn() },
         },
-        { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
+        { provide: PermissionsService, useValue: makePermsMock() },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();

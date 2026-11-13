@@ -1,11 +1,4 @@
-import {
-  Controller,
-  ForbiddenException,
-  Get,
-  Param,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiForbiddenResponse,
@@ -22,8 +15,6 @@ import { Permissions } from '../../common/decorators/permissions.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { ComplaintsService } from './complaints.service';
-import { VenuesService } from '../venues/venues.service';
-import { PermissionsService } from '../rbac/permissions.service';
 import { Complaint } from './entities/complaint.entity';
 import { ApiPaginatedResponse } from '../../common/swagger/response-helpers';
 
@@ -36,11 +27,7 @@ import { ApiPaginatedResponse } from '../../common/swagger/response-helpers';
 @Controller()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class VenueComplaintsController {
-  constructor(
-    private readonly complaints: ComplaintsService,
-    private readonly venues: VenuesService,
-    private readonly perms: PermissionsService,
-  ) {}
+  constructor(private readonly complaints: ComplaintsService) {}
 
   @Get('me/venues/:id/complaints')
   @Permissions('venue:edit:own', 'complaint:manage')
@@ -57,16 +44,8 @@ export class VenueComplaintsController {
     @Param('id', ParseUuidPipe) id: string,
     @Query() q: PaginationQueryDto,
   ) {
-    return this.assertOwnerOrAll(u.sub, id).then(() =>
-      this.complaints.listForVenue(id, q.page, q.limit),
-    );
-  }
-
-  private async assertOwnerOrAll(userId: string, venueId: string) {
-    if (await this.perms.hasPermission(userId, 'complaint:manage')) return;
-    const venue = await this.venues.findOneOrThrow(venueId);
-    if (venue.ownerId !== userId) {
-      throw new ForbiddenException('Немає доступу до скарг цього закладу');
-    }
+    return this.complaints
+      .assertCanViewForVenue(u.sub, id)
+      .then(() => this.complaints.listForVenue(id, q.page, q.limit));
   }
 }

@@ -7,6 +7,7 @@ import { AnalyticsEvent } from './entities/analytics-event.entity';
 import { CacheService } from '../../common/services/cache.service';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
+import { makePermsMock } from '../../testing/permissions-mock';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
@@ -311,7 +312,7 @@ describe('AnalyticsService.getForVenue — доступ (власник або �
       getRawMany: jest.fn().mockResolvedValue([]),
     };
     venuesService = { findOneOrThrow: jest.fn() };
-    perms = { hasPermission: jest.fn() };
+    perms = makePermsMock();
     const module = await Test.createTestingModule({
       providers: [
         AnalyticsService,

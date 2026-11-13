@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VenueView } from './entities/venue-view.entity';
@@ -77,11 +77,17 @@ export class AnalyticsService {
    * заклад для нього — не 404, а порожні метрики.
    */
   private async assertCanView(userId: string, venueId: string): Promise<void> {
+    // Спершу право: супер-адмін іде повз читання закладу й отримує порожні
+    // метрики на неіснуючий id, а не 404.
     if (await this.perms.hasPermission(userId, 'analytics:view:all')) return;
     const venue = await this.venuesService.findOneOrThrow(venueId);
-    if (venue.ownerId !== userId) {
-      throw new ForbiddenException('Немає доступу до аналітики цього закладу');
-    }
+    // право вже не пройшло вище — тут вирішує только володіння закладом
+    await this.perms.assertOwnerOrPermission(
+      venue.ownerId,
+      userId,
+      'analytics:view:all',
+      'Немає доступу до аналітики цього закладу',
+    );
   }
 
   async getForVenue(

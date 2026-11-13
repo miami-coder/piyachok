@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserRole } from './entities/user-role.entity';
@@ -44,6 +44,25 @@ export class PermissionsService {
   ): Promise<boolean> {
     const perms = await this.getUserPermissions(userId);
     return permissions.some((p) => perms.has(p));
+  }
+
+  /**
+   * Єдине місце для перевірки «власник об'єкта або має право»: власник — це
+   * порівняння id (безкоштовно), право читаємо з БД/кешу лише коли юзер не
+   * власник. Порядок «спершу власник» — спільний для всіх доменів; сервіси,
+   * яким треба пройти право до читання сутності (наприклад, analytics з
+   * маскою 404 на неіснуючий заклад), викликають його пізніше за своїм
+   * сценарієм. message — текст 403, який бачить клієнт.
+   */
+  async assertOwnerOrPermission(
+    ownerId: string | null | undefined,
+    userId: string,
+    permission: string,
+    message: string,
+  ): Promise<void> {
+    if (ownerId === userId) return;
+    if (await this.hasPermission(userId, permission)) return;
+    throw new ForbiddenException(message);
   }
 
   async invalidate(userId: string): Promise<void> {
