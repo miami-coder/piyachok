@@ -597,16 +597,24 @@ describe('HangoutsService — дата+час і видалення авторо
   });
 
   it('create на сьогодні 23:00 — ок', async () => {
-    const today = new Date();
-    const date = today.toISOString().slice(0, 10);
-    await expect(
-      service.create('u1', 'v1', {
-        date,
-        time: '23:00',
-        purpose: 'Буде',
-        groupSize: 3,
-      }),
-    ).resolves.toBeDefined();
+    // Заморожений ранок київського сьогоднішнього дня: 23:00 за Києвом
+    // свідомо в майбутньому незалежно від того, о котрій годині доби
+    // йде прогін (без цього тест флейкав за UTC-ночі після 23:00).
+    jest.useFakeTimers().setSystemTime(new Date('2026-01-15T08:00:00Z'));
+    try {
+      const today = new Date();
+      const date = today.toISOString().slice(0, 10);
+      await expect(
+        service.create('u1', 'v1', {
+          date,
+          time: '23:00',
+          purpose: 'Буде',
+          groupSize: 3,
+        }),
+      ).resolves.toBeDefined();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('create «на пару годин назад» за Києвом → 400 (введений час трактується як київський, не UTC)', async () => {
