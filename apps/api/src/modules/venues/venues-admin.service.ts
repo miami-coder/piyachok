@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { Venue, VenueStatus } from './entities/venue.entity';
 import { VenuesService } from './venues.service';
 import { RoleGrantsService } from '../rbac/role-grants.service';
+import { USER_ROLE_ADDED } from '../rbac/listeners/user-role.listener';
 import { RoleCode } from '../rbac/entities/role.enum';
 import { AuditService } from '../admin/audit.service';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
@@ -77,28 +78,52 @@ export class VenuesAdminService {
     return venue;
   }
 
-  // Апрув: статус → approved + власник отримує роль venue_admin (ідемпотентно).
+  // Апрув: статус → approved + власник отримує роль venue_admin
+  // (ідемпотентно). Атомарно: статус, роль і запис аудиту — в одній
+  // транзакції (падіння видачі ролі відкочує статус, заклад не лишається
+  // «схваленим без ролі власнику»). Події — після коміту.
   // Ручна видача ролей супер-адміном лишається незалежною.
   // Видалений (archived) заклад апрувнути не можна.
   async approve(actorId: string, venueId: string): Promise<Venue> {
     const current = await this.venueService.findOneOrThrow(venueId);
     if (current.status === VenueStatus.Archived)
       throw new ForbiddenException('Видалений заклад не можна підтвердити');
-    const venue = await this.changeStatus(venueId, VenueStatus.Approved);
-    const roleGranted = venue.ownerId
-      ? await this.roleGrants.grant(venue.ownerId, RoleCode.VenueAdmin)
-      : false;
-    await this.audit.log(actorId, 'venue_approve', 'venue', venueId, null, {
-      status: 'approved',
-      ownerId: venue.ownerId,
-      roleGranted,
-    });
+    const from = current.status;
+    const { venue, roleGranted } = await this.venues.manager.transaction(
+      async (em) => {
+        current.status = VenueStatus.Approved;
+        const venue = await em.save(current);
+        const roleGranted = venue.ownerId
+          ? await this.roleGrants.grant(venue.ownerId, RoleCode.VenueAdmin, {
+              em,
+            })
+          : false;
+        await this.audit.log(
+          actorId,
+          'venue_approve',
+          'venue',
+          venueId,
+          null,
+          { status: 'approved', ownerId: venue.ownerId, roleGranted },
+          em,
+        );
+        return { venue, roleGranted };
+      },
+    );
+    // Події після коміту: слухачі бачать уже зафіксований стан
+    this.events.emit(
+      VENUE_STATUS_CHANGED,
+      new VenueStatusChangedEvent(venueId, from, VenueStatus.Approved),
+    );
+    if (roleGranted && venue.ownerId)
+      // grant із чужим em подію не емітує — робимо це самі після коміту
+      this.events.emit(USER_ROLE_ADDED, { userId: venue.ownerId });
     return venue;
   }
 
   /** Призначити власника (існування користувача перевіряє контролер через
    *  UsersService). Власник схваленого закладу ідемпотентно отримує
-   *  venue_admin (як в approve), операція фіксується в аудиті.
+   *  venue_admin (як в approve), все атомарно в одній транзакції.
    *  Попереднього власника не чіпаємо — ручні видачі ролей незалежні. */
   async assignOwner(
     actorId: string,
@@ -107,20 +132,27 @@ export class VenuesAdminService {
   ): Promise<Venue> {
     const venue = await this.venueService.findOneOrThrow(venueId);
     const before = venue.ownerId;
-    venue.ownerId = userId;
-    const saved = await this.venues.save(venue);
-    const roleGranted =
-      venue.status === VenueStatus.Approved
-        ? await this.roleGrants.grant(userId, RoleCode.VenueAdmin)
-        : false;
-    await this.audit.log(
-      actorId,
-      'venue_assign_owner',
-      'venue',
-      venueId,
-      before ? { ownerId: before } : null,
-      { ownerId: userId, roleGranted },
+    const { saved, roleGranted } = await this.venues.manager.transaction(
+      async (em) => {
+        venue.ownerId = userId;
+        const saved = await em.save(venue);
+        const roleGranted =
+          venue.status === VenueStatus.Approved
+            ? await this.roleGrants.grant(userId, RoleCode.VenueAdmin, { em })
+            : false;
+        await this.audit.log(
+          actorId,
+          'venue_assign_owner',
+          'venue',
+          venueId,
+          before ? { ownerId: before } : null,
+          { ownerId: userId, roleGranted },
+          em,
+        );
+        return { saved, roleGranted };
+      },
     );
+    if (roleGranted) this.events.emit(USER_ROLE_ADDED, { userId });
     return saved;
   }
 }

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Review } from './entities/review.entity';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
@@ -63,10 +63,28 @@ export class ReviewsService {
       checkPhotoUrl: dto.checkPhotoUrl ?? null,
       billAmount: dto.billAmount ?? null,
     });
-    const saved = await this.reviews.save(review);
-    await this.recalc(venueId);
-    this.events.emit(REVIEW_CREATED, { reviewId: saved.id, venueId });
-    return saved;
+    try {
+      const saved = await this.reviews.manager.transaction(async (em) => {
+        const saved = await em.save(review);
+        await this.recalc(venueId, em);
+        return saved;
+      });
+      // Кеш каталогу після коміту (в транзакції скипати марно)
+      await this.venuesService.invalidateCatalogCache();
+      this.events.emit(REVIEW_CREATED, { reviewId: saved.id, venueId });
+      return saved;
+    } catch (e) {
+      // Паралельний create двох відгуків з однієї пари (venueId, userId)
+      // проскакує перевірку assertCanCreate — юнік-індекс ловить гонку.
+      if (
+        typeof e === 'object' &&
+        e !== null &&
+        (e as { code?: string }).code === '23505'
+      ) {
+        throw new ConflictException('Ви вже залишили відгук на цей заклад');
+      }
+      throw e;
+    }
   }
 
   async update(
@@ -82,8 +100,11 @@ export class ReviewsService {
       'Не можна редагувати цей відгук',
     );
     Object.assign(review, dto);
-    await this.reviews.save(review);
-    await this.recalc(review.venueId);
+    await this.reviews.manager.transaction(async (em) => {
+      await em.save(review);
+      await this.recalc(review.venueId, em);
+    });
+    await this.venuesService.invalidateCatalogCache();
     this.events.emit(REVIEW_UPDATED, { reviewId, venueId: review.venueId });
     return review;
   }
@@ -97,8 +118,11 @@ export class ReviewsService {
       'Не можна видалити цей відгук',
     );
     const venueId = review.venueId;
-    await this.reviews.delete(reviewId);
-    await this.recalc(venueId);
+    await this.reviews.manager.transaction(async (em) => {
+      await em.delete(Review, reviewId);
+      await this.recalc(venueId, em);
+    });
+    await this.venuesService.invalidateCatalogCache();
     this.events.emit(REVIEW_DELETED, { reviewId, venueId });
   }
 
@@ -180,18 +204,25 @@ export class ReviewsService {
     return this.reviews.save(r);
   }
 
-  private async recalc(venueId: string) {
-    const result = await this.reviews
-      .createQueryBuilder('r')
+  /** Перерахунок статистики рейтингу в тій самій транзакції, що й запис
+   *  відгуку: середнє по неопублікованих у сусідньому з'єднанні даних
+   *  порахувало б старе значення. */
+  private async recalc(venueId: string, em: EntityManager) {
+    const result = await em
+      .createQueryBuilder(Review, 'r')
       .select('AVG(r.rating)', 'avg')
       .addSelect('COUNT(r.id)', 'count')
       .where('r.venueId = :venueId', { venueId })
       .getRawOne<{ avg: string; count: string }>();
     // Поля закладу мутуємо тільки через venues.service — агрегат має
     // одного власника, прямий апдейт репозиторію оминав би його.
-    await this.venuesService.updateRatingStats(venueId, {
-      ratingAvg: Number(result?.avg ?? 0),
-      ratingCount: Number(result?.count ?? 0),
-    });
+    await this.venuesService.updateRatingStats(
+      venueId,
+      {
+        ratingAvg: Number(result?.avg ?? 0),
+        ratingCount: Number(result?.count ?? 0),
+      },
+      em,
+    );
   }
 }

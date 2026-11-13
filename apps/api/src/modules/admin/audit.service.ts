@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 
 @Injectable()
@@ -11,6 +11,9 @@ export class AuditService {
     private readonly audit: Repository<AuditLog>,
   ) {}
 
+  /** Запис у аудит. em — транзакція викликача: тоді запис аудиту атомарний
+   *  з самою операцією (схвалення без запису в аудит не фіксується —
+   *  провал аудиту відкочує операцію). Без em — звичайний запис. */
   async log(
     actorId: string | null,
     action: string,
@@ -18,8 +21,10 @@ export class AuditService {
     entityId: string | null,
     before: object | null = null,
     after: object | null = null,
+    em?: EntityManager,
   ): Promise<AuditLog> {
-    const entry = await this.audit.save({
+    const mgr = em ?? this.audit.manager;
+    const entry = await mgr.save(AuditLog, {
       actorId,
       action,
       entityType,

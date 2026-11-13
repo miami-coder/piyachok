@@ -20,6 +20,10 @@ describe('VenuesAdminService', () => {
     venues = {
       findAndCount: jest.fn().mockResolvedValue([[], 0]),
       save: jest.fn((v: any) => v),
+      // Транзакція апруву/assignOwner: em «всерід» — це сам мок репозиторію
+      manager: {
+        transaction: jest.fn(async (cb: any) => cb(venues)),
+      },
     };
     core = { findOneOrThrow: jest.fn() };
     roleGrants = { grant: jest.fn().mockResolvedValue(false) };
@@ -80,7 +84,20 @@ describe('VenuesAdminService', () => {
       roleGrants.grant.mockResolvedValueOnce(true);
       const v = await service.approve('admin1', 'v1');
       expect(v.status).toBe(VenueStatus.Approved);
-      expect(roleGrants.grant).toHaveBeenCalledWith('u1', 'venue_admin');
+      expect(roleGrants.grant).toHaveBeenCalledWith(
+        'u1',
+        'venue_admin',
+        expect.anything(), // em — транзакція approve/assignOwner
+      );
+      // події — після коміту транзакції
+      expect(events.emit).toHaveBeenCalledWith(
+        'venue.status_changed',
+        expect.anything(),
+      );
+      expect(events.emit).toHaveBeenCalledWith('user_role.added', {
+        userId: 'u1',
+      });
+      expect(events.emit).toHaveBeenCalledTimes(2);
       expect(audit.log).toHaveBeenCalledWith(
         'admin1',
         'venue_approve',
@@ -88,6 +105,7 @@ describe('VenuesAdminService', () => {
         'v1',
         null,
         expect.objectContaining({ roleGranted: true }),
+        expect.anything(), // em — транзакція
       );
     });
 
@@ -119,7 +137,11 @@ describe('VenuesAdminService', () => {
       roleGrants.grant.mockResolvedValueOnce(true);
       const v = await service.assignOwner('admin1', 'v1', 'u1');
       expect(v.ownerId).toBe('u1');
-      expect(roleGrants.grant).toHaveBeenCalledWith('u1', 'venue_admin');
+      expect(roleGrants.grant).toHaveBeenCalledWith(
+        'u1',
+        'venue_admin',
+        expect.anything(), // em — транзакція approve/assignOwner
+      );
       expect(audit.log).toHaveBeenCalledWith(
         'admin1',
         'venue_assign_owner',
@@ -127,6 +149,7 @@ describe('VenuesAdminService', () => {
         'v1',
         { ownerId: 'old' },
         { ownerId: 'u1', roleGranted: true },
+        expect.anything(), // em — транзакція
       );
     });
 
@@ -145,6 +168,7 @@ describe('VenuesAdminService', () => {
         'v1',
         null,
         { ownerId: 'u1', roleGranted: false },
+        expect.anything(), // em — транзакція
       );
     });
 
@@ -164,6 +188,7 @@ describe('VenuesAdminService', () => {
         'v1',
         { ownerId: 'old' },
         { ownerId: 'u1', roleGranted: false },
+        expect.anything(), // em — транзакція
       );
     });
   });

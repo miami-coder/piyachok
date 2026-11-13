@@ -37,6 +37,9 @@ describe('ReviewsService', () => {
       findOne: jest.fn(),
       delete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
+      // em «всерід» — сам мок репозиторію: save/delete/queryBuilder спеки
+      // і є тим, що відбувається всередині транзакції
+      manager: { transaction: jest.fn(async (cb: any) => cb(reviews)) },
     };
     venues = { findOne: jest.fn(), update: jest.fn() };
     // Спільна перевірка venues.service: успіх повертає заклад, несхвалений/
@@ -46,6 +49,7 @@ describe('ReviewsService', () => {
         .fn()
         .mockResolvedValue({ id: 'v1', ownerId: 'u9', status: 'approved' }),
       updateRatingStats: jest.fn().mockResolvedValue(undefined),
+      invalidateCatalogCache: jest.fn().mockResolvedValue(undefined),
     };
     perms = makePermsMock();
     events = { emit: jest.fn() };
@@ -107,14 +111,26 @@ describe('ReviewsService', () => {
       text: 'Чудовий заклад! Рекомендую',
     });
     expect(r.id).toBe('r-new');
-    expect(venuesService.updateRatingStats).toHaveBeenCalledWith('v1', {
-      ratingAvg: 4.5,
-      ratingCount: 2,
-    });
+    expect(venuesService.updateRatingStats).toHaveBeenCalledWith(
+      'v1',
+      { ratingAvg: 4.5, ratingCount: 2 },
+      reviews /* em — транзакція перерахунку */,
+    );
     expect(events.emit).toHaveBeenCalledWith(
       'review.created',
       expect.anything(),
     );
+  });
+
+  it('паралельний create двох однакових відгуків: юнік-індекс (23505) → 409', async () => {
+    reviews.findOne.mockResolvedValueOnce(null);
+    reviews.save.mockRejectedValueOnce({ code: '23505' });
+    await expect(
+      service.create('u1', 'v1', {
+        rating: 5,
+        text: 'Дубль відгуку',
+      }),
+    ).rejects.toThrow(ConflictException);
   });
 
   it('update forbids non-owner without perm', async () => {
@@ -152,7 +168,7 @@ describe('ReviewsService', () => {
       venueId: 'v1',
     });
     await service.softDelete('u1', 'r1');
-    expect(reviews.delete).toHaveBeenCalledWith('r1');
+    expect(reviews.delete).toHaveBeenCalledWith(Review, 'r1');
     expect(events.emit).toHaveBeenCalledWith(
       'review.deleted',
       expect.anything(),
@@ -199,6 +215,9 @@ describe('ReviewsService — санітизація авторів відгук�
       findOne: jest.fn(),
       delete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
+      // em «всерід» — сам мок репозиторію: save/delete/queryBuilder спеки
+      // і є тим, що відбувається всередині транзакції
+      manager: { transaction: jest.fn(async (cb: any) => cb(reviews)) },
     };
     perms = makePermsMock();
     events = { emit: jest.fn() };
@@ -211,6 +230,7 @@ describe('ReviewsService — санітизація авторів відгук�
           useValue: {
             findByIdApprovedOrThrow: jest.fn(),
             updateRatingStats: jest.fn().mockResolvedValue(undefined),
+            invalidateCatalogCache: jest.fn().mockResolvedValue(undefined),
           },
         },
         { provide: PermissionsService, useValue: perms },
@@ -290,6 +310,8 @@ describe('ReviewsService.create — лише схвалені заклади (40
       findOne: jest.fn(),
       delete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
+      // em «всерід» — сам мок репозиторію
+      manager: { transaction: jest.fn(async (cb: any) => cb(reviews)) },
     };
     // Несхвалений (pending/archived) заклад виглядає як неіснуючий —
     // правило venues.service.findByIdApprovedOrThrow.
@@ -298,6 +320,7 @@ describe('ReviewsService.create — лише схвалені заклади (40
         .fn()
         .mockRejectedValue(new NotFoundException('Заклад не знайдено')),
       updateRatingStats: jest.fn().mockResolvedValue(undefined),
+      invalidateCatalogCache: jest.fn().mockResolvedValue(undefined),
     };
     perms = makePermsMock();
     events = { emit: jest.fn() };

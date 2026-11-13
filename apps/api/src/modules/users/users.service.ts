@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import { User } from './entities/user.entity';
 import { Profile } from './entities/profile.entity';
@@ -33,7 +33,10 @@ export class UsersService {
     private readonly perms: PermissionsService,
   ) {}
 
-  async create(dto: CreateUserDto): Promise<User> {
+  /** Створення юзера з профілем. em — транзакція викликача (реєстрація
+   *  пише юзера, профіль і базову роль атомарно; провал видачі ролі
+   *  відкочує і юзера теж). Викликається тільки з реєстрації. */
+  async create(dto: CreateUserDto, em?: EntityManager): Promise<User> {
     const existing = await this.users.findOne({
       where: { email: dto.email.toLowerCase() },
     });
@@ -44,6 +47,19 @@ export class UsersService {
       email: dto.email.toLowerCase(),
       passwordHash,
     });
+    if (em) {
+      user = await em.save(user);
+      await em.save(
+        this.profiles.create({
+          userId: user.id,
+          firstname: dto.firstname,
+          lastname: dto.lastname,
+          age: dto.age ?? null,
+          phone: dto.phone ?? null,
+        }),
+      );
+      return user;
+    }
     user = await this.users.save(user);
     const profile = this.profiles.create({
       userId: user.id,

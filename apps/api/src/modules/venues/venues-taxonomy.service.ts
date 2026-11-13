@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { VenueFeature } from './entities/venue-feature.entity';
 import { VenueFeatureAssignment } from './entities/venue-feature-assignment.entity';
 import { Tag } from './entities/tag.entity';
@@ -99,26 +99,44 @@ export class VenueTaxonomyService {
     return type;
   }
 
+  /** Запис прив'язок. em — зовнішня транзакція викликача: коли передана,
+   *  всі записи йдуть через неї (атомарно з самим закладом); коли ні —
+   *  через менеджер власного репозиторію (безтранзакційний виклик). */
   async writeFeatures(
     venueId: string,
     features: VenueFeature[],
+    em?: EntityManager,
   ): Promise<void> {
-    await this.featureAssignments.delete({ venueId });
+    const mgr = em ?? this.featureAssignments.manager;
+    await mgr.delete(VenueFeatureAssignment, { venueId });
     if (features.length)
-      await this.featureAssignments.save(
+      await mgr.save(
+        VenueFeatureAssignment,
         features.map((f) => ({ venueId, featureId: f.id })),
       );
   }
 
-  async writeTags(venueId: string, tags: Tag[]): Promise<void> {
-    await this.venueTags.delete({ venueId });
+  async writeTags(
+    venueId: string,
+    tags: Tag[],
+    em?: EntityManager,
+  ): Promise<void> {
+    const mgr = em ?? this.venueTags.manager;
+    await mgr.delete(VenueTag, { venueId });
     if (tags.length)
-      await this.venueTags.save(tags.map((t) => ({ venueId, tagId: t.id })));
+      await mgr.save(
+        VenueTag,
+        tags.map((t) => ({ venueId, tagId: t.id })),
+      );
   }
 
-  async writeType(venueId: string, type: VenueType | null): Promise<void> {
-    await this.venueTypeAssignments.delete({ venueId });
-    if (type)
-      await this.venueTypeAssignments.save({ venueId, typeId: type.id });
+  async writeType(
+    venueId: string,
+    type: VenueType | null,
+    em?: EntityManager,
+  ): Promise<void> {
+    const mgr = em ?? this.venueTypeAssignments.manager;
+    await mgr.delete(VenueTypeAssignment, { venueId });
+    if (type) await mgr.save(VenueTypeAssignment, { venueId, typeId: type.id });
   }
 }

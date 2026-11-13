@@ -30,15 +30,25 @@ export class AuthService {
       // 400 (клієнтська помилка валідації), не 409
       throw new BadRequestException('Потрібно прийняти угоду користувача');
     }
-    const user = await this.users.create(dto);
 
-    // Призначаємо роль 'user' через єдину точку видачі ролей. Відсутність
-    // базової ролі — це зламаний стенд, реєстрація не може пройти мовчки.
-    if (!(await this.grants.grant(user.id, 'user'))) {
-      throw new InternalServerErrorException(
-        'Базову роль не налаштовано — зверніться до адміністрації',
-      );
-    }
+    // Юзер + профіль + базова роль — атомарно: провал видачі ролі відкочує
+    // і юзера, інакше повторна реєстрація з тим самим email була б 409,
+    // а обліковий запис назавжди лишався б без ролі.
+    const user = await this.userRoles.manager.transaction(async (em) => {
+      const user = await this.users.create(dto, em);
+
+      // Роль 'user' через єдину точку видачі ролей. Відсутність базової
+      // ролі — це зламаний стенд, реєстрація не може пройти мовчки
+      // (throw всередині транзакції = відкат усього).
+      if (!(await this.grants.grant(user.id, 'user', { em }))) {
+        throw new InternalServerErrorException(
+          'Базову роль не налаштовано — зверніться до адміністрації',
+        );
+      }
+      return user;
+    });
+    // Подію user_role.added для нового юзера не емітуємо: кешу пермішенів
+    // у нього ще не існує, інвалідувати нема чого.
 
     const roles = await this.getUserRoles(user.id);
     return this.issueTokens(user.id, user.email, roles);

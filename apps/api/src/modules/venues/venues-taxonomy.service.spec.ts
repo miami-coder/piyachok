@@ -144,38 +144,50 @@ describe('VenueTaxonomyService', () => {
   });
 
   describe('write* — повна заміна привʼязок', () => {
+    // em — «транзакція викликача»: усі записи йдуть через неї, репозиторії
+    // при наявному em не чіпаються.
+    let em: any;
+    beforeEach(() => {
+      em = { save: jest.fn(), delete: jest.fn() };
+    });
+
     it('writeFeatures: delete старих + save нових; порожній набір — delete без save', async () => {
-      await service.writeFeatures('v1', [{ id: 'f2', code: 'terrace' } as any]);
-      expect(featureAssignmentsRepo.delete).toHaveBeenCalledWith({
+      await service.writeFeatures(
+        'v1',
+        [{ id: 'f2', code: 'terrace' } as any],
+        em,
+      );
+      expect(em.delete).toHaveBeenCalledWith(VenueFeatureAssignment, {
         venueId: 'v1',
       });
-      expect(featureAssignmentsRepo.save).toHaveBeenCalledWith([
+      expect(em.save).toHaveBeenCalledWith(VenueFeatureAssignment, [
         { venueId: 'v1', featureId: 'f2' },
       ]);
 
-      featureAssignmentsRepo.save.mockClear();
-      await service.writeFeatures('v1', []);
-      expect(featureAssignmentsRepo.delete).toHaveBeenCalledTimes(2);
-      expect(featureAssignmentsRepo.save).not.toHaveBeenCalled();
+      em.save.mockClear();
+      em.delete.mockClear();
+      await service.writeFeatures('v1', [], em);
+      expect(em.delete).toHaveBeenCalledTimes(1);
+      expect(em.save).not.toHaveBeenCalled();
     });
 
     it('writeTags: delete старих + save нових', async () => {
-      await service.writeTags('v1', [{ id: 't1', slug: 'kraft' } as any]);
-      expect(venueTagsRepo.delete).toHaveBeenCalledWith({ venueId: 'v1' });
-      expect(venueTagsRepo.save).toHaveBeenCalledWith([
+      await service.writeTags('v1', [{ id: 't1', slug: 'kraft' } as any], em);
+      expect(em.delete).toHaveBeenCalledWith(VenueTag, { venueId: 'v1' });
+      expect(em.save).toHaveBeenCalledWith(VenueTag, [
         { venueId: 'v1', tagId: 't1' },
       ]);
     });
 
     it('writeType: null знімає привʼязку без save, тип — save', async () => {
-      await service.writeType('v1', null);
-      expect(venueTypeAssignmentsRepo.delete).toHaveBeenCalledWith({
+      await service.writeType('v1', null, em);
+      expect(em.delete).toHaveBeenCalledWith(VenueTypeAssignment, {
         venueId: 'v1',
       });
-      expect(venueTypeAssignmentsRepo.save).not.toHaveBeenCalled();
+      expect(em.save).not.toHaveBeenCalled();
 
-      await service.writeType('v1', { id: 'ty1', slug: 'bar' } as any);
-      expect(venueTypeAssignmentsRepo.save).toHaveBeenCalledWith({
+      await service.writeType('v1', { id: 'ty1', slug: 'bar' } as any, em);
+      expect(em.save).toHaveBeenCalledWith(VenueTypeAssignment, {
         venueId: 'v1',
         typeId: 'ty1',
       });

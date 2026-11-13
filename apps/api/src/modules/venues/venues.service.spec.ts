@@ -52,6 +52,7 @@ function taxonomyMock() {
 describe('VenuesService', () => {
   let service: VenuesService;
   let venues: any;
+  let em: any;
   let photos: any;
   let perms: any;
   let catalog: any;
@@ -65,12 +66,20 @@ describe('VenuesService', () => {
   let venueTypeAssignmentsRepo: any;
 
   beforeEach(async () => {
+    // Менеджер транзакції (create/update йдуть транзакцією): save/delete —
+    // це дії «всерід» транзакції, тому теж перевіряються на em.
+    em = {
+      save: jest.fn(async (e: any) => e),
+      delete: jest.fn(),
+      update: jest.fn(),
+    };
     venues = {
       create: jest.fn((x) => x),
       save: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn(),
       findAndCount: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
+      manager: { transaction: jest.fn(async (cb: any) => cb(em)) },
     };
     photos = { save: jest.fn(), insert: jest.fn(), count: jest.fn() };
     featuresRepo = { find: jest.fn().mockResolvedValue([]) };
@@ -164,7 +173,7 @@ describe('VenuesService', () => {
     });
     perms.hasPermission.mockResolvedValueOnce(true);
     await service.update('admin', 'v1', { name: 'X' });
-    expect(venues.save).toHaveBeenCalled();
+    expect(em.save).toHaveBeenCalled();
   });
 
   describe('update/create — очист й заміна опційних полів', () => {
@@ -182,6 +191,8 @@ describe('VenuesService', () => {
     });
 
     function draft() {
+      em.save.mockClear();
+      em.delete.mockClear();
       const venue = venueDraft();
       venues.findOne.mockResolvedValueOnce(venue);
       perms.hasPermission.mockResolvedValueOnce(true);
@@ -229,10 +240,10 @@ describe('VenuesService', () => {
       await service.update('u1', 'v1', {
         featureCodes: ['wifi', 'terrace'],
       } as any);
-      expect(featureAssignmentsRepo.delete).toHaveBeenCalledWith({
+      expect(em.delete).toHaveBeenCalledWith(VenueFeatureAssignment, {
         venueId: 'v1',
       });
-      expect(featureAssignmentsRepo.save).toHaveBeenCalledWith([
+      expect(em.save).toHaveBeenCalledWith(VenueFeatureAssignment, [
         { venueId: 'v1', featureId: 'f1' },
         { venueId: 'v1', featureId: 'f2' },
       ]);
@@ -242,25 +253,28 @@ describe('VenuesService', () => {
     it('featureCodes: порожній масив знімає всі привʼязки, невідомий код — 400', async () => {
       draft();
       await service.update('u1', 'v1', { featureCodes: [] } as any);
-      expect(featureAssignmentsRepo.delete).toHaveBeenCalledWith({
+      expect(em.delete).toHaveBeenCalledWith(VenueFeatureAssignment, {
         venueId: 'v1',
       });
-      expect(featureAssignmentsRepo.save).not.toHaveBeenCalled();
+      expect(em.save).not.toHaveBeenCalledWith(
+        VenueFeatureAssignment,
+        expect.anything(),
+      );
 
       draft();
-      featureAssignmentsRepo.delete.mockClear();
+      em.delete.mockClear();
       await expect(
         service.update('u1', 'v1', { featureCodes: ['bogus'] } as any),
       ).rejects.toThrow(BadRequestException);
-      expect(featureAssignmentsRepo.delete).not.toHaveBeenCalled();
+      expect(em.delete).not.toHaveBeenCalled();
     });
 
     it('tagSlugs: заміна набору, невідомий слаг — 400', async () => {
       draft();
       tagsRepo.find.mockResolvedValue([{ id: 't1', slug: 'kraft' }]);
       await service.update('u1', 'v1', { tagSlugs: ['kraft'] } as any);
-      expect(venueTagsRepo.delete).toHaveBeenCalledWith({ venueId: 'v1' });
-      expect(venueTagsRepo.save).toHaveBeenCalledWith([
+      expect(em.delete).toHaveBeenCalledWith(VenueTag, { venueId: 'v1' });
+      expect(em.save).toHaveBeenCalledWith(VenueTag, [
         { venueId: 'v1', tagId: 't1' },
       ]);
 
@@ -275,20 +289,24 @@ describe('VenuesService', () => {
       draft();
       venueTypesRepo.findOne.mockResolvedValue({ id: 'ty1', slug: 'bar' });
       await service.update('u1', 'v1', { typeSlug: 'bar' } as any);
-      expect(venueTypeAssignmentsRepo.delete).toHaveBeenCalledWith({
+      expect(em.delete).toHaveBeenCalledWith(VenueTypeAssignment, {
         venueId: 'v1',
       });
-      expect(venueTypeAssignmentsRepo.save).toHaveBeenCalledWith({
+      expect(em.save).toHaveBeenCalledWith(VenueTypeAssignment, {
         venueId: 'v1',
         typeId: 'ty1',
       });
 
       draft();
       await service.update('u1', 'v1', { typeSlug: null } as any);
-      expect(venueTypeAssignmentsRepo.delete).toHaveBeenCalledWith({
+      expect(em.delete).toHaveBeenCalledWith(VenueTypeAssignment, {
         venueId: 'v1',
       });
-      expect(venueTypeAssignmentsRepo.save).toHaveBeenCalledTimes(1); // лише з першого кроку
+      // лише з першого кроку: null-тип — delete без save прив'язки
+      expect(em.save).not.toHaveBeenCalledWith(
+        VenueTypeAssignment,
+        expect.anything(),
+      );
 
       draft();
       venueTypesRepo.findOne.mockResolvedValue(null);
@@ -297,7 +315,7 @@ describe('VenuesService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('create з невідомим typeSlug/tagSlug/featureCode — 400 (раніше мовчки ігнорувалось)', async () => {
+    it('create з невідомим typeSlug/tagSlug/featureCode — 400 (валідація до транзакції — запису нема взагалі)', async () => {
       venueTypesRepo.findOne.mockResolvedValue(null);
       await expect(
         service.create('u1', { name: 'X', address: 'Y', typeSlug: 'bogus' }),
@@ -316,7 +334,7 @@ describe('VenuesService', () => {
           featureCodes: ['nope'],
         }),
       ).rejects.toThrow(BadRequestException);
-      expect(venues.save).not.toHaveBeenCalled();
+      expect(em.save).not.toHaveBeenCalled();
     });
   });
 
@@ -665,6 +683,7 @@ describe('VenuesService.findOnePublic — санітизація власник�
 describe('VenuesService — модерація закладів', () => {
   let service: VenuesService;
   let venues: any;
+  let em: any;
   let catalog: any;
   let perms: any;
   let events: any;
@@ -675,12 +694,14 @@ describe('VenuesService — модерація закладів', () => {
     catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };
+    em = { save: jest.fn(async (e: any) => e), delete: jest.fn() };
     venues = {
       findOne: jest.fn(),
       save: jest.fn((v) => v),
       create: jest.fn((x) => x),
       findAndCount: jest.fn().mockResolvedValue([[], 0]),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
+      manager: { transaction: jest.fn(async (cb: any) => cb(em)) },
     };
     const module = await Test.createTestingModule({
       providers: [

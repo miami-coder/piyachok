@@ -10,6 +10,9 @@ describe('AuditService', () => {
   beforeEach(async () => {
     audit = {
       save: jest.fn().mockImplementation((x) => Promise.resolve(x)),
+      manager: {
+        save: jest.fn((_e: any, x: any) => Promise.resolve(x)),
+      },
     };
     const module = await Test.createTestingModule({
       providers: [
@@ -24,7 +27,7 @@ describe('AuditService', () => {
     const r = await service.log('u1', 'soft_delete', 'user', 'u2', null, {
       deletedAt: '2026-08-27',
     });
-    expect(audit.save).toHaveBeenCalledWith({
+    expect(audit.manager.save).toHaveBeenCalledWith(AuditLog, {
       actorId: 'u1',
       action: 'soft_delete',
       entityType: 'user',
@@ -37,7 +40,7 @@ describe('AuditService', () => {
 
   it('log defaults before/after to null', async () => {
     await service.log('u1', 'assign_role', 'user', 'u2');
-    expect(audit.save).toHaveBeenCalledWith({
+    expect(audit.manager.save).toHaveBeenCalledWith(AuditLog, {
       actorId: 'u1',
       action: 'assign_role',
       entityType: 'user',

@@ -45,6 +45,8 @@ describe('AuthService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(qb),
       manager: {
         findOne: jest.fn().mockResolvedValue({ id: 'r-user', code: 'user' }),
+        // реєстрація: юзер+роль у транзакції; em віддаємо в колбек як є
+        transaction: jest.fn(async (cb: any) => cb((userRoles as any).manager)),
       },
       save: jest.fn().mockResolvedValue(undefined),
     };
@@ -95,7 +97,11 @@ describe('AuthService', () => {
       acceptEula: true,
     });
     expect(users.create).toHaveBeenCalled();
-    expect(grants.grant).toHaveBeenCalledWith('u-new', 'user');
+    expect(grants.grant).toHaveBeenCalledWith(
+      'u-new',
+      'user',
+      expect.anything(), // em — транзакція реєстрації
+    );
     expect(userRoles.save).not.toHaveBeenCalled();
     expect(res.accessToken).toBe('access-tok');
     expect(res.user.roles).toEqual(['user']);
@@ -225,7 +231,13 @@ describe('AuthService — видалення юзера фінальне', () =>
       findById: jest.fn(),
       ensureUserRole: jest.fn().mockResolvedValue(undefined),
     };
-    userRoles = { save: jest.fn(), manager: { findOne: jest.fn() } };
+    userRoles = {
+      save: jest.fn(),
+      manager: {
+        findOne: jest.fn(),
+        transaction: jest.fn(async (cb: any) => cb((userRoles as any).manager)),
+      },
+    };
     tokens = {
       signAccess: jest.fn().mockReturnValue('access-tok'),
       signRefresh: jest.fn().mockReturnValue('refresh-tok'),

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { Role } from './entities/role.entity';
 import { UserRole } from './entities/user-role.entity';
 import { USER_ROLE_ADDED } from './listeners/user-role.listener';
@@ -30,11 +30,18 @@ export class RoleGrantsService {
    * true — роль щойно видана; false — вже була або ролі з таким кодом немає.
    * assignedBy — хто видав (адмін із панелі); для системних видач
    * (реєстрація, апрув закладу) передається як null/undefined.
+   *
+   * opts.em — транзакція викликача: запис іде через неї, атомарно з операцією
+   * викликача (апрув закладу, реєстрація). Тоді подію user_role.added НЕ
+   * емітуємо: слухач інвалідує кеш пермішенів читанням із бази, а всередині
+   * невідкритої транзакції ролі там ще немає — кеш запомнить порожній стан.
+   * Викликач емітує подію сам після коміту. Без em (безтранзакційний виклик)
+   * подія емітується звідси як і раніше.
    */
   async grant(
     userId: string,
     roleCode: string,
-    opts?: { assignedBy?: string | null },
+    opts?: { assignedBy?: string | null; em?: EntityManager },
   ): Promise<boolean> {
     const role = await this.roles.findOne({ where: { code: roleCode } });
     if (!role) return false;
@@ -42,13 +49,15 @@ export class RoleGrantsService {
       where: { userId, roleId: role.id },
     });
     if (existing) return false;
-    await this.userRoles.save({
+    const values = {
       userId,
       roleId: role.id,
       assignedBy: opts?.assignedBy ?? null,
-    });
+    };
+    const mgr = opts?.em ?? this.userRoles.manager;
+    await mgr.save(UserRole, values);
     // подію емітуємо лише при реальній видачі — при no-op кеш чіпати не треба
-    this.events.emit(USER_ROLE_ADDED, { userId });
+    if (!opts?.em) this.events.emit(USER_ROLE_ADDED, { userId });
     return true;
   }
 }

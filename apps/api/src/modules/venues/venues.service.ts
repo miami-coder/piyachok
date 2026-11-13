@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Venue, VenueStatus } from './entities/venue.entity';
 import { VenuePhoto } from './entities/venue-photo.entity';
@@ -61,19 +61,24 @@ export class VenuesService {
       averageCheck: dto.averageCheck ?? null,
       status: autoApprove ? VenueStatus.Approved : VenueStatus.Pending,
     });
-    // Фічі/теги/тип валідуємо ДО збереження: невідомий код/слаг — 400, щоб
-    // не лишати напівстворений заклад без прив'язок.
+    // Фічі/теги/тип валідуємо ДО збереження: невідомий код/слаг — 400.
+    // Сам запис атомарний: заклад і всі його прив'язки в одній транзакції —
+    // падіння всередині лишає базу без напівстворених даних.
     const [features, tags, type] = await Promise.all([
       this.taxonomy.resolveFeatures(dto.featureCodes ?? []),
       this.taxonomy.resolveTags(dto.tagSlugs ?? []),
       this.taxonomy.resolveType(dto.typeSlug),
     ]);
-    await this.venues.save(venue);
-    await this.taxonomy.writeFeatures(venue.id, features);
-    await this.taxonomy.writeTags(venue.id, tags);
-    await this.taxonomy.writeType(venue.id, type);
-    this.events.emit(VENUE_CREATED, new VenueCreatedEvent(venue.id));
-    return venue;
+    const saved = await this.venues.manager.transaction(async (em) => {
+      const created = await em.save(venue);
+      await this.taxonomy.writeFeatures(created.id, features, em);
+      await this.taxonomy.writeTags(created.id, tags, em);
+      await this.taxonomy.writeType(created.id, type, em);
+      return created;
+    });
+    // Подія після коміту: слухачі бачать уже зафіксований стан
+    this.events.emit(VENUE_CREATED, new VenueCreatedEvent(saved.id));
+    return saved;
   }
 
   async update(
@@ -107,6 +112,7 @@ export class VenuesService {
     // Набірні поля: ключ присутній — замінюємо набір повністю (порожній
     // масив/порожній рядок/null = очистити), невідомі коди/слаги — 400.
     // Валідація до запису: 400 не залишає заклад із знятими прив'язками.
+    // Запис атомарний з прив'язками: одна транзакція, падіння = відкат.
     const features =
       'featureCodes' in dto
         ? await this.taxonomy.resolveFeatures(dto.featureCodes ?? [])
@@ -119,13 +125,15 @@ export class VenuesService {
       'typeSlug' in dto
         ? await this.taxonomy.resolveType(dto.typeSlug)
         : undefined;
-    if (features) await this.taxonomy.writeFeatures(venue.id, features);
-    if (tags) await this.taxonomy.writeTags(venue.id, tags);
-    if (type !== undefined) await this.taxonomy.writeType(venue.id, type);
-
-    await this.venues.save(venue);
-    this.events.emit(VENUE_UPDATED, new VenueUpdatedEvent(venue.id));
-    return venue;
+    const saved = await this.venues.manager.transaction(async (em) => {
+      if (features) await this.taxonomy.writeFeatures(venue.id, features, em);
+      if (tags) await this.taxonomy.writeTags(venue.id, tags, em);
+      if (type !== undefined) await this.taxonomy.writeType(venue.id, type, em);
+      return em.save(venue);
+    });
+    // Подія після коміту
+    this.events.emit(VENUE_UPDATED, new VenueUpdatedEvent(saved.id));
+    return saved;
   }
 
   /** Об'єкт без порожніх ключів: строкові значення трімуємо, пусті/null
@@ -277,11 +285,24 @@ export class VenuesService {
    *  сервісів (відгуки, аналітика) йдуть тільки через методи нижче, а не
    *  прямим апдейтом репозиторію — інакше зміни оминали б інвалідацію
    *  кешу списку, який сортується за ratingAvg. */
+  /** Оновлення статистики рейтингу. em — транзакція викликача (відгуки
+   *  рахують середнім в одній транзакції з записом відгуку); тоді і
+   *  інвалідацію кешу каталогу робить викликач після коміту, бо всередині
+   *  транзакції скинути марно — інші з'єднання ще бачать старі дані і
+   *  можуть відразу закешувати їх ізнову. Без em — запис і скидання тут. */
   async updateRatingStats(
     venueId: string,
     stats: { ratingAvg: number; ratingCount: number },
+    em?: EntityManager,
   ): Promise<void> {
-    await this.venues.update(venueId, stats);
+    const mgr = em ?? this.venues.manager;
+    await mgr.update(Venue, venueId, stats);
+    if (!em) await this.catalog.invalidateListCache();
+  }
+
+  /** Скидання кешу списку каталогу після транзакційної мутації рейтингу
+   *  (викликач оновлює статистику через updateRatingStats з em). */
+  async invalidateCatalogCache(): Promise<void> {
     await this.catalog.invalidateListCache();
   }
 
