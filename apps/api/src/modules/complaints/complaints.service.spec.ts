@@ -110,9 +110,7 @@ describe('ComplaintsService', () => {
       orderBy: jest.fn().mockReturnThis(),
       offset: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
-      getManyAndCount: jest
-        .fn()
-        .mockResolvedValue([[{ id: 'c1' }], 1]),
+      getManyAndCount: jest.fn().mockResolvedValue([[{ id: 'c1' }], 1]),
     };
     complaints.createQueryBuilder.mockReturnValue(qb);
     const r = await service.listForVenue('v1', 1, 20);
@@ -121,10 +119,7 @@ describe('ComplaintsService', () => {
       { venueId: 'v1' },
     );
     expect(qb.andWhere).toHaveBeenCalledWith('c.status IN (:...statuses)', {
-      statuses: [
-        ComplaintStatus.New,
-        ComplaintStatus.InReview,
-      ],
+      statuses: [ComplaintStatus.New, ComplaintStatus.InReview],
     });
     expect(r.data).toEqual([{ id: 'c1' }]);
     expect(r.meta).toEqual({

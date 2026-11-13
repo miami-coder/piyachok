@@ -28,7 +28,9 @@ async function main() {
   const ds = defaultDataSource;
   if (!ds.isInitialized) await ds.initialize();
 
-  const role = await ds.getRepository(Role).findOne({ where: { code: 'super_admin' } });
+  const role = await ds
+    .getRepository(Role)
+    .findOne({ where: { code: 'super_admin' } });
   if (!role) {
     throw new Error(
       'Ролі super_admin немає в базі — спершу прогоніть міграції (pnpm migration:run або сервіс `migrate`).',
@@ -41,7 +43,9 @@ async function main() {
 
   if (existing && !existing.deletedAt) {
     // Гарантуємо роль, якщо її раптом зняли (ідемпотентність)
-    const hasRole = (existing.userRoles ?? []).some((ur) => ur.roleId === role.id);
+    const hasRole = (existing.userRoles ?? []).some(
+      (ur) => ur.roleId === role.id,
+    );
     if (hasRole) {
       console.log(`Супер-адмін ${EMAIL} вже існує — створення пропущено.`);
       return;
@@ -51,7 +55,9 @@ async function main() {
       roleId: role.id,
       assignedBy: null,
     });
-    console.log(`Супер-адмін ${EMAIL} існує — додано відсутню роль super_admin.`);
+    console.log(
+      `Супер-адмін ${EMAIL} існує — додано відсутню роль super_admin.`,
+    );
     return;
   }
 
@@ -67,7 +73,9 @@ async function main() {
     await ds
       .getRepository(UserRole)
       .insert({ userId: existing.id, roleId: role.id, assignedBy: null });
-    console.log(`Супер-адмін ${EMAIL} було soft-deleted — відновлено з роллю super_admin.`);
+    console.log(
+      `Супер-адмін ${EMAIL} було soft-deleted — відновлено з роллю super_admin.`,
+    );
     return;
   }
 

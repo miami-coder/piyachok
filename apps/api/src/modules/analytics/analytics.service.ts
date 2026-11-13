@@ -120,7 +120,9 @@ export class AnalyticsService {
       .orderBy('count', 'DESC');
     if (from) eventsQb.andWhere('e."occurredAt" >= :from', { from });
     if (to)
-      eventsQb.andWhere('e."occurredAt" < (:to)::date + interval \'1 day\'', { to });
+      eventsQb.andWhere('e."occurredAt" < (:to)::date + interval \'1 day\'', {
+        to,
+      });
     const eventsByType = await eventsQb.getRawMany<{
       eventType: string;
       count: number;
@@ -167,7 +169,9 @@ export class AnalyticsService {
       .orderBy('date', 'ASC');
     if (opts.from) qb.andWhere('v."viewedAt" >= :from', { from: opts.from });
     if (opts.to)
-      qb.andWhere('v."viewedAt" < (:to)::date + interval \'1 day\'', { to: opts.to });
+      qb.andWhere('v."viewedAt" < (:to)::date + interval \'1 day\'', {
+        to: opts.to,
+      });
     return qb.getRawMany<{ date: string; count: number }>();
   }
 
@@ -192,7 +196,9 @@ export class AnalyticsService {
       .limit(limit);
     if (opts.from) qb.andWhere('v."viewedAt" >= :from', { from: opts.from });
     if (opts.to)
-      qb.andWhere('v."viewedAt" < (:to)::date + interval \'1 day\'', { to: opts.to });
+      qb.andWhere('v."viewedAt" < (:to)::date + interval \'1 day\'', {
+        to: opts.to,
+      });
     const data = await qb.getRawMany<{
       venueId: string;
       venueName: string | null;
@@ -205,7 +211,9 @@ export class AnalyticsService {
     if (opts.from)
       totalQb.andWhere('v."viewedAt" >= :from', { from: opts.from });
     if (opts.to)
-      totalQb.andWhere('v."viewedAt" < (:to)::date + interval \'1 day\'', { to: opts.to });
+      totalQb.andWhere('v."viewedAt" < (:to)::date + interval \'1 day\'', {
+        to: opts.to,
+      });
     const row = await totalQb.getRawOne<{ total: number }>();
     return { data, meta: buildMeta({ page, limit, offset }, row?.total ?? 0) };
   }

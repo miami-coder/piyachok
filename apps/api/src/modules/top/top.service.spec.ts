@@ -115,9 +115,24 @@ describe('TopService (фіча «Топ закладів»)', () => {
         position: 0,
         createdAt: early,
         entries: [
-          { id: 'e2', position: 0, createdAt: late, venue: { id: 'v2', name: 'B' } },
-          { id: 'e1', position: 0, createdAt: early, venue: { id: 'v1', name: 'A' } },
-          { id: 'e3', position: 1, createdAt: late, venue: { id: 'v3', name: 'C' } },
+          {
+            id: 'e2',
+            position: 0,
+            createdAt: late,
+            venue: { id: 'v2', name: 'B' },
+          },
+          {
+            id: 'e1',
+            position: 0,
+            createdAt: early,
+            venue: { id: 'v1', name: 'A' },
+          },
+          {
+            id: 'e3',
+            position: 1,
+            createdAt: late,
+            venue: { id: 'v3', name: 'C' },
+          },
         ],
       },
     ]);
@@ -174,9 +189,9 @@ describe('TopService (фіча «Топ закладів»)', () => {
 
   it('reorderCategories: список не відповідає категоріям → 400 (нічого не зберігається)', async () => {
     categories.find.mockResolvedValue([{ id: 'c1', position: 0 }]);
-    await expect(
-      service.reorderCategories(['c1', 'c-hack']),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.reorderCategories(['c1', 'c-hack'])).rejects.toThrow(
+      BadRequestException,
+    );
     expect(categories.save).not.toHaveBeenCalled();
     await expect(service.reorderCategories([])).rejects.toThrow(
       BadRequestException,
@@ -186,9 +201,9 @@ describe('TopService (фіча «Топ закладів»)', () => {
 
   it('reorderEntries: неіснуюча категорія → 404', async () => {
     categories.findOne.mockResolvedValueOnce(null);
-    await expect(
-      service.reorderEntries('nope', ['e1']),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.reorderEntries('nope', ['e1'])).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('reorderEntries: список не відповідає записам категорії → 400 (нічого не зберігається)', async () => {
@@ -200,9 +215,9 @@ describe('TopService (фіча «Топ закладів»)', () => {
     ).rejects.toThrow(BadRequestException);
     expect(entries.save).not.toHaveBeenCalled();
     // пропущений запис — теж
-    await expect(
-      service.reorderEntries('c1', []),
-    ).rejects.toThrow(BadRequestException);
+    await expect(service.reorderEntries('c1', [])).rejects.toThrow(
+      BadRequestException,
+    );
     expect(entries.save).not.toHaveBeenCalled();
   });
 

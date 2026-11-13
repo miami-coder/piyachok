@@ -38,7 +38,9 @@ describe('ContentService (загальні тексти)', () => {
   });
 
   it('update: невідомий ключ → 404', async () => {
-    await expect(service.update('hacker', 'x')).rejects.toThrow(NotFoundException);
+    await expect(service.update('hacker', 'x')).rejects.toThrow(
+      NotFoundException,
+    );
     expect(repo.save).not.toHaveBeenCalled();
   });
 });

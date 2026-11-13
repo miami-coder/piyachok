@@ -11,7 +11,11 @@ import { RbacModule } from '../rbac/rbac.module';
 @Module({
   imports: [TypeOrmModule.forFeature([Complaint]), VenuesModule, RbacModule],
   providers: [ComplaintsService],
-  controllers: [ComplaintsController, AdminComplaintsController, VenueComplaintsController],
+  controllers: [
+    ComplaintsController,
+    AdminComplaintsController,
+    VenueComplaintsController,
+  ],
   exports: [ComplaintsService],
 })
 export class ComplaintsModule {}

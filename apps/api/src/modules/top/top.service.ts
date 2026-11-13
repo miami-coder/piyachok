@@ -180,7 +180,10 @@ export class TopService {
   async reorderCategories(categoryIds: string[]): Promise<void> {
     const cats = await this.categories.find();
     const idSet = new Set(categoryIds);
-    if (cats.length !== categoryIds.length || cats.some((c) => !idSet.has(c.id)))
+    if (
+      cats.length !== categoryIds.length ||
+      cats.some((c) => !idSet.has(c.id))
+    )
       throw new BadRequestException('Список категорій не відповідає наявним');
     for (const [i, id] of categoryIds.entries()) {
       const row = cats.find((c) => c.id === id) as {

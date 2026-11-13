@@ -14,6 +14,10 @@ export class CreateReviewDto {
   @IsString() @MinLength(10) @MaxLength(2000) text: string;
   @IsOptional() @IsString() checkPhotoUrl?: string;
   /** Сума чека відвідувача, грн (опційно). */
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0) @Max(1_000_000)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
   billAmount?: number;
 }

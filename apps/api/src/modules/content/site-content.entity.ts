@@ -1,8 +1,4 @@
-import {
-  Column,
-  Entity,
-  UpdateDateColumn,
-} from 'typeorm';
+import { Column, Entity, UpdateDateColumn } from 'typeorm';
 
 /** Редакційні тексти сайту («Про нас», контакти): key/value, змінює
  *  супер-адмін («Про нас», контакти — правка в адмінці). */

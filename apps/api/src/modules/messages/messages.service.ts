@@ -25,7 +25,11 @@ export class MessagesService {
   ) {}
 
   /** Користувач пише менеджеру (власнику) закладу. */
-  async sendToVenueManager(userId: string, venueId: string, dto: SendMessageDto) {
+  async sendToVenueManager(
+    userId: string,
+    venueId: string,
+    dto: SendMessageDto,
+  ) {
     const venue = await this.venues.findOneOrThrow(venueId);
     return this.save({
       senderId: userId,
@@ -43,7 +47,11 @@ export class MessagesService {
     messageId: string,
     dto: SendMessageDto,
   ) {
-    const message = await this.getOwnVenueMessage(managerId, venueId, messageId);
+    const message = await this.getOwnVenueMessage(
+      managerId,
+      venueId,
+      messageId,
+    );
     return this.save({
       senderId: managerId,
       recipientId: message.senderId,
@@ -64,12 +72,7 @@ export class MessagesService {
     const { page, limit, offset } = normalizePagination(opts);
     const qb = this.messages
       .createQueryBuilder('m')
-      .leftJoinAndMapOne(
-        'm.sender',
-        Profile,
-        'p',
-        'p."userId" = m."senderId"',
-      )
+      .leftJoinAndMapOne('m.sender', Profile, 'p', 'p."userId" = m."senderId"')
       .where('m.venueId = :venueId', { venueId })
       .andWhere('m.kind = :kind', { kind: MessageKind.UserToManager })
       .orderBy('m.createdAt', 'DESC')
@@ -105,7 +108,11 @@ export class MessagesService {
   }
 
   /** Відповідь адмінки на фідбек — потрапляє у вхідні автора. */
-  async replyToFeedback(adminId: string, feedbackId: string, dto: SendMessageDto) {
+  async replyToFeedback(
+    adminId: string,
+    feedbackId: string,
+    dto: SendMessageDto,
+  ) {
     const feedback = await this.getFeedback(feedbackId);
     return this.save({
       senderId: adminId,
@@ -173,7 +180,10 @@ export class MessagesService {
   ) {
     const message = await this.messages.findOne({ where: { id: messageId } });
     if (!message) throw new NotFoundException('Повідомлення не знайдено');
-    if (message.venueId !== venueId || message.kind !== MessageKind.UserToManager)
+    if (
+      message.venueId !== venueId ||
+      message.kind !== MessageKind.UserToManager
+    )
       throw new NotFoundException('Повідомлення не знайдено');
     const venue = await this.venues.findOneOrThrow(venueId);
     await this.assertCanManageVenue(managerId, venue);

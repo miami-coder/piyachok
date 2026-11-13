@@ -11,7 +11,13 @@ describe('AdminComplaintsController', () => {
     complaints = { listPending: jest.fn(), resolve: jest.fn() };
     const module = await Test.createTestingModule({
       controllers: [AdminComplaintsController],
-      providers: [{ provide: PermissionsService, useValue: { hasAnyPermission: jest.fn().mockResolvedValue(true) } }, { provide: ComplaintsService, useValue: complaints }],
+      providers: [
+        {
+          provide: PermissionsService,
+          useValue: { hasAnyPermission: jest.fn().mockResolvedValue(true) },
+        },
+        { provide: ComplaintsService, useValue: complaints },
+      ],
     }).compile();
     controller = module.get(AdminComplaintsController);
   });

@@ -8,7 +8,9 @@ import { Public } from '../../common/decorators/public.decorator';
 import { ContentService } from './content.service';
 
 class UpdateContentDto {
-  @IsOptional() @IsString() @MaxLength(5000)
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
   value?: string | null;
 }
 

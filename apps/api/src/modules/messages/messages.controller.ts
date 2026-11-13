@@ -53,14 +53,22 @@ export class MessagesController {
     @Param('id', ParseUuidPipe) venueId: string,
     @Body() dto: SendMessageDto,
   ) {
-    return this.messages.sendToVenueManager(u.sub, venueId, dto).then((data) => ({
-      data,
-    }));
+    return this.messages
+      .sendToVenueManager(u.sub, venueId, dto)
+      .then((data) => ({
+        data,
+      }));
   }
 
   @Post('feedback')
-  @ApiOperation({ summary: "Зворотний зв'язок «написати нам» (→ скринька адмінки)" })
-  @ApiDataResponse({ status: 201, type: Message, description: 'Створене звернення (kind=feedback)' })
+  @ApiOperation({
+    summary: "Зворотний зв'язок «написати нам» (→ скринька адмінки)",
+  })
+  @ApiDataResponse({
+    status: 201,
+    type: Message,
+    description: 'Створене звернення (kind=feedback)',
+  })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiBadRequestResponse({ description: 'Невалідні дані' })
   sendFeedback(@CurrentUser() u: JwtUser, @Body() dto: SendMessageDto) {
@@ -86,7 +94,9 @@ export class MessagesController {
     },
   })
   unreadCount(@CurrentUser() u: JwtUser) {
-    return this.messages.unreadCount(u.sub).then((count) => ({ data: { count } }));
+    return this.messages
+      .unreadCount(u.sub)
+      .then((count) => ({ data: { count } }));
   }
 
   @Patch('me/messages/:id/read')
@@ -100,8 +110,13 @@ export class MessagesController {
   }
 
   @Get('me/venues/:id/messages')
-  @ApiOperation({ summary: 'Повідомлення користувачів про заклад (для власника)' })
-  @ApiPaginatedResponse({ type: Message, description: 'Повідомлення про заклад' })
+  @ApiOperation({
+    summary: 'Повідомлення користувачів про заклад (для власника)',
+  })
+  @ApiPaginatedResponse({
+    type: Message,
+    description: 'Повідомлення про заклад',
+  })
   @ApiForbiddenResponse({ description: 'Немає доступу до цього закладу' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   venueInbox(

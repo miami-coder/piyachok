@@ -290,7 +290,10 @@ describe('HangoutsService.create — лише схвалені заклади', 
   // create — теж мутація стрічки: без скиду кешу новий запит на /hangouts
   // не видний до кінця TTL кешу
   it('create → скидає кеш списку пиячів (delByPattern hangouts:list:*)', async () => {
-    venues.findOneOrThrow.mockResolvedValueOnce({ id: 'v1', status: 'approved' });
+    venues.findOneOrThrow.mockResolvedValueOnce({
+      id: 'v1',
+      status: 'approved',
+    });
     await service.create('u1', 'v1', {
       date: futureDate(),
       time: '20:00',

@@ -38,7 +38,9 @@ describe('Favorites E2E', () => {
       });
     venueId = venue.body.data.id;
     // фікстура: під новими правилами діяти можна лише на approved-закладі
-    await ds.query(`UPDATE venues SET status='approved' WHERE id = $1`, [venueId]);
+    await ds.query(`UPDATE venues SET status='approved' WHERE id = $1`, [
+      venueId,
+    ]);
   });
 
   afterAll(async () => {
