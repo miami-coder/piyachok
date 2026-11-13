@@ -318,9 +318,12 @@ export class VenuesService {
 
   /** Лічильник переглядів кеш списку навмисно не скидає: viewCount не
    *  бере участі в сортуванні каталогу, а перегляди частіші за запити
-   *  списку — інвалідація на кожен перегляд убила б кеш узагалі. */
-  async incrementViewCount(venueId: string): Promise<void> {
-    await this.venues.increment({ id: venueId }, 'viewCount', 1);
+   *  списку — інвалідація на кожен перегляд убила б кеш узагалі.
+   *  З чужим em рахує в чужій транзакції (запис перегляду і лічильник
+   *  комітятся однією операцією в analytics.service). */
+  async incrementViewCount(venueId: string, em?: EntityManager): Promise<void> {
+    const mgr = em ?? this.venues.manager;
+    await mgr.increment(Venue, { id: venueId }, 'viewCount', 1);
   }
 
   /** Карта закладу для чужих списків: тільки показові поля, у тому самому

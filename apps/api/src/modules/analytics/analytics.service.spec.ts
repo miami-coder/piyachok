@@ -12,13 +12,21 @@ import { makePermsMock } from '../../testing/permissions-mock';
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
   let views: any;
+  let emSave: any;
   let eventsRepo: any;
   let cache: any;
   let venuesService: any;
 
   beforeEach(async () => {
+    // Запис перегляду йде через менеджер транзакції (рядок + лічильник
+    // закладу комітятся однією операцією), тому em.save — головний мок
+    emSave = jest.fn().mockResolvedValue(undefined);
     views = {
-      save: jest.fn().mockResolvedValue(undefined),
+      manager: {
+        transaction: jest.fn(async (cb: (em: unknown) => Promise<unknown>) =>
+          cb({ save: emSave }),
+        ),
+      },
       count: jest.fn().mockResolvedValue(0),
       createQueryBuilder: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
@@ -74,7 +82,12 @@ describe('AnalyticsService', () => {
     cache.get.mockResolvedValueOnce(null);
     const r = await service.recordView('v1', 'u1');
     expect(r).toEqual({ recorded: true });
-    expect(views.save).toHaveBeenCalled();
+    expect(views.manager.transaction).toHaveBeenCalled();
+    expect(emSave).toHaveBeenCalledWith(VenueView, {
+      venueId: 'v1',
+      userId: 'u1',
+      sessionId: null,
+    });
     expect(cache.set).toHaveBeenCalled();
   });
 
@@ -82,7 +95,7 @@ describe('AnalyticsService', () => {
     cache.get.mockResolvedValueOnce('1');
     const r = await service.recordView('v1', 'u1');
     expect(r).toEqual({ recorded: false });
-    expect(views.save).not.toHaveBeenCalled();
+    expect(views.manager.transaction).not.toHaveBeenCalled();
   });
 
   // Ідентичність дедупа — тільки userId/sessionId: заголовки (наприклад
@@ -91,7 +104,7 @@ describe('AnalyticsService', () => {
   it('recordView без identity не записує перегляд', async () => {
     const r = await service.recordView('v1', null, null);
     expect(r).toEqual({ recorded: false });
-    expect(views.save).not.toHaveBeenCalled();
+    expect(views.manager.transaction).not.toHaveBeenCalled();
     expect(cache.get).not.toHaveBeenCalled();
     expect(cache.set).not.toHaveBeenCalled();
   });
@@ -108,7 +121,7 @@ describe('AnalyticsService', () => {
     cache.get.mockResolvedValueOnce('1');
     const second = await service.recordView('v1', null, 'sess-1');
     expect(second).toEqual({ recorded: false });
-    expect(views.save).toHaveBeenCalledTimes(1);
+    expect(views.manager.transaction).toHaveBeenCalledTimes(1);
   });
 
   it('recordView неіснуючого закладу — 404, запису і дедуп-ключа немає', async () => {
@@ -118,7 +131,7 @@ describe('AnalyticsService', () => {
     await expect(service.recordView('v-ghost', 'u1')).rejects.toThrow(
       'Заклад не знайдено',
     );
-    expect(views.save).not.toHaveBeenCalled();
+    expect(views.manager.transaction).not.toHaveBeenCalled();
     expect(cache.get).not.toHaveBeenCalled();
     expect(cache.set).not.toHaveBeenCalled();
   });
@@ -130,17 +143,17 @@ describe('AnalyticsService', () => {
     await expect(service.recordView('v1', 'u1')).rejects.toThrow(
       'Заклад не знайдено',
     );
-    expect(views.save).not.toHaveBeenCalled();
+    expect(views.manager.transaction).not.toHaveBeenCalled();
     expect(cache.set).not.toHaveBeenCalled();
   });
 
   it('при падінні запису дедуп-ключ не спалюється — ретрай можливий', async () => {
     cache.get.mockResolvedValue(null);
-    views.save.mockRejectedValueOnce(new Error('db down'));
+    emSave.mockRejectedValueOnce(new Error('db down'));
     await expect(service.recordView('v1', 'u1')).rejects.toThrow('db down');
     expect(cache.set).not.toHaveBeenCalled();
     // ретрай після відновлення записує перегляд, а не відсікається дедупом
-    views.save.mockResolvedValueOnce(undefined);
+    emSave.mockResolvedValueOnce(undefined);
     const retry = await service.recordView('v1', 'u1');
     expect(retry).toEqual({ recorded: true });
   });
@@ -231,9 +244,13 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
     incrementViewCount: jest.fn().mockResolvedValue(undefined),
   };
 
-  it('recorded → viewCount закладу інкрементується через venues.service', async () => {
+  it('recorded → viewCount закладу інкрементується у тій самій транзакції, що й рядок перегляду', async () => {
     const views = {
-      save: jest.fn().mockResolvedValue(undefined),
+      manager: {
+        transaction: jest.fn(async (cb: (em: unknown) => Promise<unknown>) =>
+          cb({ save: jest.fn() }),
+        ),
+      },
       createQueryBuilder: jest.fn(),
     };
     const venuesService = {
@@ -259,12 +276,18 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
     const service = module.get(AnalyticsService);
     const res = await service.recordView('v1', 'u1', null);
     expect(res.recorded).toBe(true);
-    expect(venuesService.incrementViewCount).toHaveBeenCalledWith('v1');
+    // другим аргументом іде em транзакції — інкремент і вставка комітятся разом
+    expect(venuesService.incrementViewCount).toHaveBeenCalledWith(
+      'v1',
+      expect.anything(),
+    );
   });
 
   it('дедуплікація: recorded:false — лічильник не чіпається', async () => {
     const views = {
-      save: jest.fn(),
+      manager: {
+        transaction: jest.fn(),
+      },
       createQueryBuilder: jest.fn(),
     };
     const cache = { get: jest.fn().mockResolvedValue('1'), set: jest.fn() };

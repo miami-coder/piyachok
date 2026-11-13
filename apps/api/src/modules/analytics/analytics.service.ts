@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { VenueView } from './entities/venue-view.entity';
 import { AnalyticsEvent } from './entities/analytics-event.entity';
 import { CacheService } from '../../common/services/cache.service';
@@ -34,6 +34,21 @@ export class AnalyticsService {
    * X-Forwarded-For задається самим клієнтом — «дедуп по IP» обходився
    * підміною заголовка, тому без userId/sessionId перегляд не записується.
    */
+  /** Спільний фільтр діапазону для всіх аналітичних запитів: from —
+   *  включно, to — включно до кінця дня (строкова конкатенація з
+   *  ISO-часом падала в PG 22007, тому to спершу каститься до date
+   *  і додається день). column — константа з репозиторіїв цього
+   *  сервісу, не користувацький вхід. */
+  private applyDateRange(
+    qb: SelectQueryBuilder<any>,
+    column: string,
+    from?: string,
+    to?: string,
+  ): void {
+    if (from) qb.andWhere(`${column} >= :from`, { from });
+    if (to) qb.andWhere(`${column} < (:to)::date + interval '1 day'`, { to });
+  }
+
   async recordView(
     venueId: string,
     userId?: string | null,
@@ -48,15 +63,18 @@ export class AnalyticsService {
     const dedupKey = `view:dedup:${identity}:${venueId}`;
     const seen = await this.cache.get<string>(dedupKey);
     if (seen) return { recorded: false };
-    await this.views.save({
-      venueId,
-      userId: userId ?? null,
-      sessionId: sessionId ?? null,
+    // Рядок перегляду і лічильник закладу — одна транзакція: розсинхрон
+    // «перегляд записаний, лічильник старий» або навпаки неможливий.
+    await this.views.manager.transaction(async (em) => {
+      await em.save(VenueView, {
+        venueId,
+        userId: userId ?? null,
+        sessionId: sessionId ?? null,
+      });
+      await this.venuesService.incrementViewCount(venueId, em);
     });
-    // Лічильник закладу ніколи не оновлювався і був завжди 0
-    await this.venuesService.incrementViewCount(venueId);
-    // Ключ дедупу ставимо тільки після успішного запису: якщо збереження
-    // впало, ідентичність не спалена на TTL і ретрай можливий
+    // Ключ дедупу ставимо тільки після успішного коміту: якщо запис
+    // впав, ідентичність не спалена на TTL і ретрай можливий
     await this.cache.set(dedupKey, '1', VIEW_DEDUP_TTL);
     return { recorded: true };
   }
@@ -109,15 +127,7 @@ export class AnalyticsService {
       .where('v."venueId" = :venueId', { venueId })
       .groupBy('date')
       .orderBy('date', 'ASC');
-    if (from) viewsQb.andWhere('v."viewedAt" >= :from', { from });
-    if (to)
-      // to — дата без часу: включно до кінця дня (<= to зрізає опівноччя)
-      viewsQb.andWhere(
-        // to — ISO-дата (може містити час): включно до кінця дня (строкова
-        // конкатенація з ISO-часом падала в PG 22007)
-        'v."viewedAt" < (:to)::date + interval \'1 day\'',
-        { to },
-      );
+    this.applyDateRange(viewsQb, 'v."viewedAt"', from, to);
     const viewsByDay = await viewsQb.getRawMany<{
       date: string;
       count: number;
@@ -130,11 +140,7 @@ export class AnalyticsService {
       .where('e."venueId" = :venueId', { venueId })
       .groupBy('e."eventType"')
       .orderBy('count', 'DESC');
-    if (from) eventsQb.andWhere('e."occurredAt" >= :from', { from });
-    if (to)
-      eventsQb.andWhere('e."occurredAt" < (:to)::date + interval \'1 day\'', {
-        to,
-      });
+    this.applyDateRange(eventsQb, 'e."occurredAt"', from, to);
     const eventsByType = await eventsQb.getRawMany<{
       eventType: string;
       count: number;
@@ -179,11 +185,7 @@ export class AnalyticsService {
       .addSelect('COUNT(*)::int', 'count')
       .groupBy('date')
       .orderBy('date', 'ASC');
-    if (opts.from) qb.andWhere('v."viewedAt" >= :from', { from: opts.from });
-    if (opts.to)
-      qb.andWhere('v."viewedAt" < (:to)::date + interval \'1 day\'', {
-        to: opts.to,
-      });
+    this.applyDateRange(qb, 'v."viewedAt"', opts.from, opts.to);
     return qb.getRawMany<{ date: string; count: number }>();
   }
 
@@ -206,11 +208,7 @@ export class AnalyticsService {
       .orderBy('views', 'DESC')
       .offset(offset)
       .limit(limit);
-    if (opts.from) qb.andWhere('v."viewedAt" >= :from', { from: opts.from });
-    if (opts.to)
-      qb.andWhere('v."viewedAt" < (:to)::date + interval \'1 day\'', {
-        to: opts.to,
-      });
+    this.applyDateRange(qb, 'v."viewedAt"', opts.from, opts.to);
     const data = await qb.getRawMany<{
       venueId: string;
       venueName: string | null;
@@ -220,12 +218,7 @@ export class AnalyticsService {
     const totalQb = this.views
       .createQueryBuilder('v')
       .select('COUNT(DISTINCT v."venueId")::int', 'total');
-    if (opts.from)
-      totalQb.andWhere('v."viewedAt" >= :from', { from: opts.from });
-    if (opts.to)
-      totalQb.andWhere('v."viewedAt" < (:to)::date + interval \'1 day\'', {
-        to: opts.to,
-      });
+    this.applyDateRange(totalQb, 'v."viewedAt"', opts.from, opts.to);
     const row = await totalQb.getRawOne<{ total: number }>();
     return { data, meta: buildMeta({ page, limit, offset }, row?.total ?? 0) };
   }
