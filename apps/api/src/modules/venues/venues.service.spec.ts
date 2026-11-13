@@ -18,10 +18,7 @@ import { VenueTag } from './entities/venue-tag.entity';
 import { VenueType } from './entities/venue-type.entity';
 import { VenueTypeAssignment } from './entities/venue-type-assignment.entity';
 import { PermissionsService } from '../rbac/permissions.service';
-import { RoleGrantsService } from '../rbac/role-grants.service';
 import { FileStorageService } from '../../common/services/file-storage.service';
-import { AuditService } from '../admin/audit.service';
-import type { SanitizedUser } from '../../common/utils/sanitize-user';
 
 function qb() {
   return {
@@ -59,8 +56,6 @@ describe('VenuesService', () => {
   let catalog: any;
   let events: any;
   let storage: any;
-  let roleGrants: any;
-  let audit: any;
   let featuresRepo: any;
   let tagsRepo: any;
   let featureAssignmentsRepo: any;
@@ -84,8 +79,6 @@ describe('VenuesService', () => {
     venueTypesRepo = { findOne: jest.fn() };
     venueTypeAssignmentsRepo = { save: jest.fn(), delete: jest.fn() };
     perms = { hasPermission: jest.fn(), invalidate: jest.fn() };
-    roleGrants = { grant: jest.fn() };
-    audit = { log: jest.fn() };
     catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn() };
@@ -123,8 +116,6 @@ describe('VenuesService', () => {
         { provide: VenuesCatalogService, useValue: catalog },
         { provide: EventEmitter2, useValue: events },
         { provide: FileStorageService, useValue: storage },
-        { provide: RoleGrantsService, useValue: roleGrants },
-        { provide: AuditService, useValue: audit },
       ],
     }).compile();
     service = module.get(VenuesService);
@@ -355,126 +346,6 @@ describe('VenuesService', () => {
     expect(venues.save).toHaveBeenCalled();
   });
 
-  it('approve змінює статус і видає власнику роль venue_admin', async () => {
-    venues.findOne.mockResolvedValueOnce({
-      id: 'v1',
-      ownerId: 'u1',
-      status: VenueStatus.Pending,
-    });
-    // approve: другий фетч у changeStatus (перевірка archived → потім зміна)
-    venues.findOne.mockResolvedValueOnce({
-      id: 'v1',
-      ownerId: 'u1',
-      status: VenueStatus.Pending,
-    });
-    roleGrants.grant.mockResolvedValueOnce(true);
-    const v = await service.approve('admin1', 'v1');
-    expect(v.status).toBe(VenueStatus.Approved);
-    expect(roleGrants.grant).toHaveBeenCalledWith('u1', 'venue_admin');
-    expect(audit.log).toHaveBeenCalledWith(
-      'admin1',
-      'venue_approve',
-      'venue',
-      'v1',
-      null,
-      expect.anything(),
-    );
-  });
-
-  it('approve не дублює роль, якщо власник уже має venue_admin', async () => {
-    venues.findOne.mockResolvedValueOnce({
-      id: 'v1',
-      ownerId: 'u1',
-      status: VenueStatus.Pending,
-    });
-    venues.findOne.mockResolvedValueOnce({
-      id: 'v1',
-      ownerId: 'u1',
-      status: VenueStatus.Pending,
-    });
-    roleGrants.grant.mockResolvedValueOnce(false); // вже видана
-    await service.approve('admin1', 'v1');
-    expect(roleGrants.grant).toHaveBeenCalledTimes(1);
-  });
-
-  it('approve за відсутності ролі venue_admin у системі — статус змінює, роль не видає', async () => {
-    venues.findOne.mockResolvedValueOnce({
-      id: 'v1',
-      ownerId: 'u1',
-      status: VenueStatus.Pending,
-    });
-    venues.findOne.mockResolvedValueOnce({
-      id: 'v1',
-      ownerId: 'u1',
-      status: VenueStatus.Pending,
-    });
-    roleGrants.grant.mockResolvedValueOnce(false);
-    const v = await service.approve('admin1', 'v1');
-    expect(v.status).toBe(VenueStatus.Approved);
-    expect(roleGrants.grant).toHaveBeenCalledTimes(1);
-  });
-
-  describe('assignOwner', () => {
-    it('схваленому закладу — новому власнику ідемпотентно видається venue_admin + аудит з before/after', async () => {
-      venues.findOne.mockResolvedValueOnce({
-        id: 'v1',
-        ownerId: 'old',
-        status: VenueStatus.Approved,
-      });
-      roleGrants.grant.mockResolvedValueOnce(true);
-      await service.assignOwner('admin1', 'v1', 'u1');
-      expect(venues.save).toHaveBeenCalledWith(
-        expect.objectContaining({ ownerId: 'u1' }),
-      );
-      expect(roleGrants.grant).toHaveBeenCalledWith('u1', 'venue_admin');
-      expect(audit.log).toHaveBeenCalledWith(
-        'admin1',
-        'venue_assign_owner',
-        'venue',
-        'v1',
-        { ownerId: 'old' },
-        { ownerId: 'u1', roleGranted: true },
-      );
-    });
-
-    it('pending-заклад — роль не видається (її видасть approve), у аудиті roleGranted: false', async () => {
-      venues.findOne.mockResolvedValueOnce({
-        id: 'v1',
-        ownerId: null,
-        status: VenueStatus.Pending,
-      });
-      await service.assignOwner('admin1', 'v1', 'u1');
-      expect(roleGrants.grant).not.toHaveBeenCalled();
-      expect(audit.log).toHaveBeenCalledWith(
-        'admin1',
-        'venue_assign_owner',
-        'venue',
-        'v1',
-        null,
-        { ownerId: 'u1', roleGranted: false },
-      );
-    });
-
-    it('власник уже має роль — дублю не пишеться, roleGranted: false', async () => {
-      venues.findOne.mockResolvedValueOnce({
-        id: 'v1',
-        ownerId: 'old',
-        status: VenueStatus.Approved,
-      });
-      roleGrants.grant.mockResolvedValueOnce(false);
-      await service.assignOwner('admin1', 'v1', 'u1');
-      expect(roleGrants.grant).toHaveBeenCalledTimes(1);
-      expect(audit.log).toHaveBeenCalledWith(
-        'admin1',
-        'venue_assign_owner',
-        'venue',
-        'v1',
-        { ownerId: 'old' },
-        { ownerId: 'u1', roleGranted: false },
-      );
-    });
-  });
-
   it('softDelete кидає 403 для не-власника без права', async () => {
     venues.findOne.mockResolvedValueOnce({
       id: 'v1',
@@ -491,18 +362,6 @@ describe('VenuesService', () => {
     venues.findOne.mockResolvedValueOnce(null);
     await expect(service.findOneOrThrow('x')).rejects.toThrow(
       NotFoundException,
-    );
-  });
-
-  it('changeStatus emits status_changed event', async () => {
-    venues.findOne.mockResolvedValueOnce({
-      id: 'v1',
-      status: VenueStatus.Pending,
-    });
-    await service.changeStatus('v1', VenueStatus.Approved);
-    expect(events.emit).toHaveBeenCalledWith(
-      'venue.status_changed',
-      expect.anything(),
     );
   });
 
@@ -685,8 +544,6 @@ describe('VenuesService.findOnePublic — санітизація власник�
   let events: any;
   let storage: any;
   let photos: any;
-  let roleGrants: any;
-  let audit: any;
 
   beforeEach(async () => {
     photos = {};
@@ -694,8 +551,6 @@ describe('VenuesService.findOnePublic — санітизація власник�
     catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };
-    roleGrants = { grant: jest.fn() };
-    audit = {};
     venues = {
       findOne: jest.fn(),
       save: jest.fn(),
@@ -727,8 +582,6 @@ describe('VenuesService.findOnePublic — санітизація власник�
         { provide: PermissionsService, useValue: perms },
         { provide: VenuesCatalogService, useValue: catalog },
         { provide: FileStorageService, useValue: storage },
-        { provide: RoleGrantsService, useValue: roleGrants },
-        { provide: AuditService, useValue: audit },
         { provide: EventEmitter2, useValue: events },
       ],
     }).compile();
@@ -768,28 +621,6 @@ describe('VenuesService.findOnePublic — санітизація власник�
     expect(res.owner.profile.phone).toBeUndefined();
   });
 
-  it('findApproved (адмінський список модерації) — owner без passwordHash/email/phone', async () => {
-    venues.findAndCount.mockResolvedValueOnce([
-      [
-        {
-          id: 'v1',
-          owner: {
-            id: 'u1',
-            email: 'o@x.com',
-            passwordHash: '$2b$10$secret',
-            profile: { firstname: 'Олег', phone: '+380991234567' },
-          },
-        },
-      ],
-      1,
-    ]);
-    const res = await service.findApproved(1, 20);
-    const own = res.data[0].owner as SanitizedUser;
-    expect(own).not.toHaveProperty('passwordHash');
-    expect(own).not.toHaveProperty('email');
-    expect((own.profile as { phone?: unknown }).phone).toBeUndefined();
-    expect(own.profile?.firstname).toBe('Олег');
-  });
 });
 
 describe('VenuesService — модерація закладів', () => {
@@ -799,16 +630,11 @@ describe('VenuesService — модерація закладів', () => {
   let perms: any;
   let events: any;
   let storage: any;
-  let audit: any;
-  let roleGrants: any;
-
   beforeEach(async () => {
     perms = { hasPermission: jest.fn().mockResolvedValue(false) };
     catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };
-    audit = { log: jest.fn().mockResolvedValue(undefined) };
-    roleGrants = { grant: jest.fn().mockResolvedValue(false) };
     venues = {
       findOne: jest.fn(),
       save: jest.fn((v) => v),
@@ -840,25 +666,10 @@ describe('VenuesService — модерація закладів', () => {
         { provide: PermissionsService, useValue: perms },
         { provide: VenuesCatalogService, useValue: catalog },
         { provide: FileStorageService, useValue: storage },
-        { provide: RoleGrantsService, useValue: roleGrants },
-        { provide: AuditService, useValue: audit },
         { provide: EventEmitter2, useValue: events },
       ],
     }).compile();
     service = module.get(VenuesService);
-  });
-
-  it('апрув видаленого (archived) закладу заборонений', async () => {
-    venues.findOne.mockResolvedValueOnce({
-      id: 'v1',
-      status: 'archived',
-      ownerId: 'u9',
-    });
-    // changeStatus/save не мають апрувнути archived
-    await expect(service.approve('admin1', 'v1')).rejects.toThrow(
-      ForbiddenException,
-    );
-    expect(venues.save).not.toHaveBeenCalled();
   });
 
   it('супер-адмін (venue:moderate) створює заклад одразу approved', async () => {

@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { PermissionsService } from '../rbac/permissions.service';
 import { VenuesAdminController } from './venues-admin.controller';
-import { VenuesService } from './venues.service';
+import { VenuesAdminService } from './venues-admin.service';
 import { UsersService } from '../users/users.service';
 import { VenueStatus } from './entities/venue.entity';
 
@@ -16,8 +16,6 @@ describe('VenuesAdminController', () => {
       findApproved: jest.fn(),
       changeStatus: jest.fn(),
       approve: jest.fn(),
-      findOneOrThrow: jest.fn(),
-      venues: { save: jest.fn() },
       assignOwner: jest.fn(),
     };
     users = { findById: jest.fn() };
@@ -28,7 +26,7 @@ describe('VenuesAdminController', () => {
           provide: PermissionsService,
           useValue: { hasAnyPermission: jest.fn().mockResolvedValue(true) },
         },
-        { provide: VenuesService, useValue: venues },
+        { provide: VenuesAdminService, useValue: venues },
         { provide: UsersService, useValue: users },
       ],
     }).compile();
@@ -64,7 +62,7 @@ describe('VenuesAdminController', () => {
     expect(res.data.id).toBe('v1');
   });
 
-  it('assignOwner делегує у VenuesService.assignOwner з актором', async () => {
+  it('assignOwner делегує у VenuesAdminService.assignOwner з актором', async () => {
     await controller.assignOwner({ sub: 'a1' } as any, 'v1', 'u1');
     expect(venues.assignOwner).toHaveBeenCalledWith('a1', 'v1', 'u1');
   });

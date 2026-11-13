@@ -23,7 +23,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { Permissions } from '../../common/decorators/permissions.decorator';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
-import { VenuesService } from './venues.service';
+import { VenuesAdminService } from './venues-admin.service';
 import { Venue, VenueStatus } from './entities/venue.entity';
 import { UsersService } from '../users/users.service';
 import {
@@ -37,7 +37,7 @@ import {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 export class VenuesAdminController {
   constructor(
-    private readonly venues: VenuesService,
+    private readonly venues: VenuesAdminService,
     private readonly users: UsersService,
   ) {}
 
