@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Favorite } from './entities/favorite.entity';
-import { Venue } from '../venues/entities/venue.entity';
 import { VenuesService } from '../venues/venues.service';
 import {
   buildMeta,
@@ -14,7 +13,6 @@ export class FavoritesService {
   constructor(
     @InjectRepository(Favorite)
     private readonly favorites: Repository<Favorite>,
-    @InjectRepository(Venue) private readonly venues: Repository<Venue>,
     private readonly venuesService: VenuesService,
   ) {}
 
@@ -41,26 +39,9 @@ export class FavoritesService {
       take: limit,
     });
     const venueIds = favs.map((f) => f.venueId);
-    if (venueIds.length === 0) {
-      return { data: [], meta: buildMeta({ page, limit, offset }, total) };
-    }
-    const venues = await this.venues.find({
-      where: { id: In(venueIds) },
-    });
-    const byId = new Map(venues.map((v) => [v.id, v]));
-    const data = favs
-      .map((f) => {
-        const v = byId.get(f.venueId);
-        if (!v) return null;
-        return {
-          id: v.id,
-          name: v.name,
-          address: v.address,
-          ratingAvg: v.ratingAvg,
-          mainPhotoUrl: v.mainPhotoUrl,
-        };
-      })
-      .filter((d): d is NonNullable<typeof d> => d !== null);
+    // Дані закладу беремо тільки через venues.service — проекція картки
+    // зберігає порядок вподобань, неіснуючі заклади відкидаються.
+    const data = await this.venuesService.getCardsByIds(venueIds);
     return { data, meta: buildMeta({ page, limit, offset }, total) };
   }
 }

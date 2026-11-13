@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VenueView } from './entities/venue-view.entity';
 import { AnalyticsEvent } from './entities/analytics-event.entity';
-import { Venue } from '../venues/entities/venue.entity';
 import { CacheService } from '../../common/services/cache.service';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
@@ -23,8 +22,6 @@ export class AnalyticsService {
     private readonly views: Repository<VenueView>,
     @InjectRepository(AnalyticsEvent)
     private readonly eventsRepo: Repository<AnalyticsEvent>,
-    @InjectRepository(Venue)
-    private readonly venues: Repository<Venue>,
     private readonly cache: CacheService,
     private readonly venuesService: VenuesService,
     private readonly perms: PermissionsService,
@@ -57,7 +54,7 @@ export class AnalyticsService {
       sessionId: sessionId ?? null,
     });
     // Лічильник закладу ніколи не оновлювався і був завжди 0
-    await this.venues.increment({ id: venueId }, 'viewCount', 1);
+    await this.venuesService.incrementViewCount(venueId);
     // Ключ дедупу ставимо тільки після успішного запису: якщо збереження
     // впало, ідентичність не спалена на TTL і ретрай можливий
     await this.cache.set(dedupKey, '1', VIEW_DEDUP_TTL);
@@ -197,7 +194,7 @@ export class AnalyticsService {
       .select('v."venueId"', 'venueId')
       .addSelect('v2."name"', 'venueName')
       .addSelect('COUNT(*)::int', 'views')
-      .leftJoin(Venue, 'v2', 'v2."id" = v."venueId"')
+      .leftJoin('venues', 'v2', 'v2."id" = v."venueId"')
       .groupBy('v."venueId"')
       .addGroupBy('v2."name"')
       .orderBy('views', 'DESC')

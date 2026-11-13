@@ -8,7 +8,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
 import { Review } from './entities/review.entity';
-import { Venue } from '../venues/entities/venue.entity';
 import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { PermissionsService } from '../rbac/permissions.service';
@@ -32,7 +31,6 @@ function sanitizeReviewAuthors(data: Review[]) {
 export class ReviewsService {
   constructor(
     @InjectRepository(Review) private readonly reviews: Repository<Review>,
-    @InjectRepository(Venue) private readonly venues: Repository<Venue>,
     private readonly venuesService: VenuesService,
     private readonly perms: PermissionsService,
     private readonly events: EventEmitter2,
@@ -189,7 +187,9 @@ export class ReviewsService {
       .addSelect('COUNT(r.id)', 'count')
       .where('r.venueId = :venueId', { venueId })
       .getRawOne<{ avg: string; count: string }>();
-    await this.venues.update(venueId, {
+    // Поля закладу мутуємо тільки через venues.service — агрегат має
+    // одного власника, прямий апдейт репозиторію оминав би його.
+    await this.venuesService.updateRatingStats(venueId, {
       ratingAvg: Number(result?.avg ?? 0),
       ratingCount: Number(result?.count ?? 0),
     });

@@ -40,6 +40,12 @@ import {
   VenueUpdatedEvent,
 } from './events';
 
+/** Показові поля закладу для карток у чужих списках (наприклад, вподобання). */
+export type VenueCard = Pick<
+  Venue,
+  'id' | 'name' | 'address' | 'ratingAvg' | 'mainPhotoUrl'
+>;
+
 /** CSV «wifi, parking» → [ 'wifi', 'parking' ] (пробіли по краях зріжувати). */
 function csvCodes(csv: string): string[] {
   return csv
@@ -613,6 +619,48 @@ export class VenuesService {
     // кеш пермішенів (TTL 5 хв) треба скинути, щоб роль набрала сили одразу
     await this.perms.invalidate(userId);
     return true;
+  }
+
+  /** Агрегат «Заклад» має одного власника: мутації його полів із сусідніх
+   *  сервісів (відгуки, аналітика) йдуть тільки через методи нижче, а не
+   *  прямим апдейтом репозиторію — інакше зміни оминали б інвалідацію
+   *  кешу списку, який сортується за ratingAvg. */
+  async updateRatingStats(
+    venueId: string,
+    stats: { ratingAvg: number; ratingCount: number },
+  ): Promise<void> {
+    await this.venues.update(venueId, stats);
+    await this.invalidateListCache();
+  }
+
+  /** Лічильник переглядів кеш списку навмисно не скидає: viewCount не
+   *  бере участі в сортуванні каталогу, а перегляди частіші за запити
+   *  списку — інвалідація на кожен перегляд убила б кеш узагалі. */
+  async incrementViewCount(venueId: string): Promise<void> {
+    await this.venues.increment({ id: venueId }, 'viewCount', 1);
+  }
+
+  /** Карта закладу для чужих списків: тільки показові поля, у тому самому
+   *  порядку, що й вхідні id; неіснуючі id просто відкидаються. */
+  async getCardsByIds(ids: string[]): Promise<VenueCard[]> {
+    if (ids.length === 0) return [];
+    const rows: Venue[] = await this.venues.find({
+      where: { id: In(ids) },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        ratingAvg: true,
+        mainPhotoUrl: true,
+      },
+    });
+    const byId = new Map<string, Venue>(rows.map((v) => [v.id, v]));
+    const cards: VenueCard[] = [];
+    for (const id of ids) {
+      const v = byId.get(id);
+      if (v) cards.push(v);
+    }
+    return cards;
   }
 
   async invalidateListCache() {

@@ -8,7 +8,6 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ReviewsService } from './reviews.service';
 import { Review } from './entities/review.entity';
-import { Venue } from '../venues/entities/venue.entity';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
 import type { SanitizedUser } from '../../common/utils/sanitize-user';
@@ -40,11 +39,12 @@ describe('ReviewsService', () => {
     };
     venues = { findOne: jest.fn(), update: jest.fn() };
     // Спільна перевірка venues.service: успіх повертає заклад, несхвалений/
-    // неіснуючий кидає 404.
+    // неіснуючий кидає 404. Статистику рейтингу мутуємо теж через venues.service.
     venuesService = {
       findByIdApprovedOrThrow: jest
         .fn()
         .mockResolvedValue({ id: 'v1', ownerId: 'u9', status: 'approved' }),
+      updateRatingStats: jest.fn().mockResolvedValue(undefined),
     };
     perms = { hasPermission: jest.fn() };
     events = { emit: jest.fn() };
@@ -52,7 +52,6 @@ describe('ReviewsService', () => {
       providers: [
         ReviewsService,
         { provide: getRepositoryToken(Review), useValue: reviews },
-        { provide: getRepositoryToken(Venue), useValue: venues },
         { provide: VenuesService, useValue: venuesService },
         { provide: PermissionsService, useValue: perms },
         { provide: EventEmitter2, useValue: events },
@@ -107,7 +106,7 @@ describe('ReviewsService', () => {
       text: 'Чудовий заклад! Рекомендую',
     });
     expect(r.id).toBe('r-new');
-    expect(venues.update).toHaveBeenCalledWith('v1', {
+    expect(venuesService.updateRatingStats).toHaveBeenCalledWith('v1', {
       ratingAvg: 4.5,
       ratingCount: 2,
     });
@@ -189,7 +188,6 @@ describe('ReviewsService', () => {
 describe('ReviewsService — санітизація авторів відгуків', () => {
   let service: ReviewsService;
   let reviews: any;
-  let venues: any;
   let perms: any;
   let events: any;
 
@@ -201,17 +199,18 @@ describe('ReviewsService — санітизація авторів відгук�
       delete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
     };
-    venues = { findOne: jest.fn(), update: jest.fn() };
     perms = { hasPermission: jest.fn() };
     events = { emit: jest.fn() };
     const module = await Test.createTestingModule({
       providers: [
         ReviewsService,
         { provide: getRepositoryToken(Review), useValue: reviews },
-        { provide: getRepositoryToken(Venue), useValue: venues },
         {
           provide: VenuesService,
-          useValue: { findByIdApprovedOrThrow: jest.fn() },
+          useValue: {
+            findByIdApprovedOrThrow: jest.fn(),
+            updateRatingStats: jest.fn().mockResolvedValue(undefined),
+          },
         },
         { provide: PermissionsService, useValue: perms },
         { provide: EventEmitter2, useValue: events },
@@ -279,7 +278,6 @@ describe('ReviewsService — санітизація авторів відгук�
 describe('ReviewsService.create — лише схвалені заклади (404-маска)', () => {
   let service: ReviewsService;
   let reviews: any;
-  let venues: any;
   let venuesService: any;
   let perms: any;
   let events: any;
@@ -292,13 +290,13 @@ describe('ReviewsService.create — лише схвалені заклади (40
       delete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
     };
-    venues = { update: jest.fn() };
     // Несхвалений (pending/archived) заклад виглядає як неіснуючий —
     // правило venues.service.findByIdApprovedOrThrow.
     venuesService = {
       findByIdApprovedOrThrow: jest
         .fn()
         .mockRejectedValue(new NotFoundException('Заклад не знайдено')),
+      updateRatingStats: jest.fn().mockResolvedValue(undefined),
     };
     perms = { hasPermission: jest.fn() };
     events = { emit: jest.fn() };
@@ -306,7 +304,6 @@ describe('ReviewsService.create — лише схвалені заклади (40
       providers: [
         ReviewsService,
         { provide: getRepositoryToken(Review), useValue: reviews },
-        { provide: getRepositoryToken(Venue), useValue: venues },
         { provide: VenuesService, useValue: venuesService },
         { provide: PermissionsService, useValue: perms },
         { provide: EventEmitter2, useValue: events },
@@ -384,10 +381,6 @@ describe('ReviewsService.listForVenue — видалений автор', () => 
       providers: [
         ReviewsService,
         { provide: getRepositoryToken(Review), useValue: reviews },
-        {
-          provide: getRepositoryToken(Venue),
-          useValue: { findOne: jest.fn() },
-        },
         {
           provide: VenuesService,
           useValue: { findByIdApprovedOrThrow: jest.fn() },

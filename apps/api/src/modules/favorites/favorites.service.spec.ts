@@ -3,7 +3,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { FavoritesService } from './favorites.service';
 import { Favorite } from './entities/favorite.entity';
-import { Venue } from '../venues/entities/venue.entity';
 import { VenuesService } from '../venues/venues.service';
 
 const favoriteRepo = () => ({
@@ -34,7 +33,6 @@ const buildModule = async (favorites: any, venuesService: any) => {
     providers: [
       FavoritesService,
       { provide: getRepositoryToken(Favorite), useValue: favorites },
-      { provide: getRepositoryToken(Venue), useValue: {} },
       { provide: VenuesService, useValue: venuesService },
     ],
   }).compile();

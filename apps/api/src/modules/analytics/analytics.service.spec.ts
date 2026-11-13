@@ -3,7 +3,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
 import { VenueView } from './entities/venue-view.entity';
-import { Venue } from '../venues/entities/venue.entity';
 import { AnalyticsEvent } from './entities/analytics-event.entity';
 import { CacheService } from '../../common/services/cache.service';
 import { VenuesService } from '../venues/venues.service';
@@ -52,15 +51,12 @@ describe('AnalyticsService', () => {
       findByIdApprovedOrThrow: jest
         .fn()
         .mockResolvedValue({ id: 'v1', status: 'approved' }),
+      incrementViewCount: jest.fn().mockResolvedValue(undefined),
     };
     const module = await Test.createTestingModule({
       providers: [
         AnalyticsService,
         { provide: getRepositoryToken(VenueView), useValue: views },
-        {
-          provide: getRepositoryToken(Venue),
-          useValue: { increment: jest.fn() },
-        },
         { provide: getRepositoryToken(AnalyticsEvent), useValue: eventsRepo },
         { provide: CacheService, useValue: cache },
         { provide: VenuesService, useValue: venuesService },
@@ -195,10 +191,6 @@ describe('AnalyticsService.stats — діапазон дат', () => {
       providers: [
         AnalyticsService,
         { provide: getRepositoryToken(VenueView), useValue: views },
-        {
-          provide: getRepositoryToken(Venue),
-          useValue: { increment: jest.fn() },
-        },
         { provide: getRepositoryToken(AnalyticsEvent), useValue: eventsRepo },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
         { provide: VenuesService, useValue: { findOneOrThrow: jest.fn() } },
@@ -226,39 +218,37 @@ describe('AnalyticsService.stats — діапазон дат', () => {
 });
 
 describe('AnalyticsService.recordView — лічильник закладу', () => {
-  it('recorded → viewCount закладу інкрементується', async () => {
+  // Лічильник мутуємо тільки через venues.service: агрегат «Заклад»
+  // має одного власника, прямий репозиторій із аналітики прибрано.
+  const venuesServiceMock = {
+    findOneOrThrow: jest
+      .fn()
+      .mockResolvedValue({ id: 'v1', status: 'approved' }),
+    findByIdApprovedOrThrow: jest
+      .fn()
+      .mockResolvedValue({ id: 'v1', status: 'approved' }),
+    incrementViewCount: jest.fn().mockResolvedValue(undefined),
+  };
+
+  it('recorded → viewCount закладу інкрементується через venues.service', async () => {
     const views = {
       save: jest.fn().mockResolvedValue(undefined),
       createQueryBuilder: jest.fn(),
     };
-    const venues = {
-      increment: jest.fn().mockResolvedValue(undefined),
+    const venuesService = {
+      ...venuesServiceMock,
+      incrementViewCount: jest.fn().mockResolvedValue(undefined),
     };
     const module = await Test.createTestingModule({
       providers: [
         AnalyticsService,
         { provide: getRepositoryToken(VenueView), useValue: views },
         {
-          provide: getRepositoryToken(Venue),
-          useValue: { increment: jest.fn() },
-        },
-        {
           provide: getRepositoryToken(AnalyticsEvent),
           useValue: { save: jest.fn() },
         },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
-        { provide: getRepositoryToken(Venue), useValue: venues },
-        {
-          provide: VenuesService,
-          useValue: {
-            findOneOrThrow: jest
-              .fn()
-              .mockResolvedValue({ id: 'v1', status: 'approved' }),
-            findByIdApprovedOrThrow: jest
-              .fn()
-              .mockResolvedValue({ id: 'v1', status: 'approved' }),
-          },
-        },
+        { provide: VenuesService, useValue: venuesService },
         {
           provide: PermissionsService,
           useValue: { hasPermission: jest.fn().mockResolvedValue(true) },
@@ -268,7 +258,7 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
     const service = module.get(AnalyticsService);
     const res = await service.recordView('v1', 'u1', null);
     expect(res.recorded).toBe(true);
-    expect(venues.increment).toHaveBeenCalledWith({ id: 'v1' }, 'viewCount', 1);
+    expect(venuesService.incrementViewCount).toHaveBeenCalledWith('v1');
   });
 
   it('дедуплікація: recorded:false — лічильник не чіпається', async () => {
@@ -276,33 +266,21 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
       save: jest.fn(),
       createQueryBuilder: jest.fn(),
     };
-    const venues = { increment: jest.fn() };
     const cache = { get: jest.fn().mockResolvedValue('1'), set: jest.fn() };
+    const venuesService = {
+      ...venuesServiceMock,
+      incrementViewCount: jest.fn().mockResolvedValue(undefined),
+    };
     const module = await Test.createTestingModule({
       providers: [
         AnalyticsService,
         { provide: getRepositoryToken(VenueView), useValue: views },
         {
-          provide: getRepositoryToken(Venue),
-          useValue: { increment: jest.fn() },
-        },
-        {
           provide: getRepositoryToken(AnalyticsEvent),
           useValue: { save: jest.fn() },
         },
         { provide: CacheService, useValue: cache },
-        { provide: getRepositoryToken(Venue), useValue: venues },
-        {
-          provide: VenuesService,
-          useValue: {
-            findOneOrThrow: jest
-              .fn()
-              .mockResolvedValue({ id: 'v1', status: 'approved' }),
-            findByIdApprovedOrThrow: jest
-              .fn()
-              .mockResolvedValue({ id: 'v1', status: 'approved' }),
-          },
-        },
+        { provide: VenuesService, useValue: venuesService },
         {
           provide: PermissionsService,
           useValue: { hasPermission: jest.fn().mockResolvedValue(true) },
@@ -312,7 +290,7 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
     const service = module.get(AnalyticsService);
     const res = await service.recordView('v1', 'u1', null);
     expect(res.recorded).toBe(false);
-    expect(venues.increment).not.toHaveBeenCalled();
+    expect(venuesService.incrementViewCount).not.toHaveBeenCalled();
   });
 });
 
@@ -340,10 +318,6 @@ describe('AnalyticsService.getForVenue — доступ (власник або �
         {
           provide: getRepositoryToken(VenueView),
           useValue: { createQueryBuilder: jest.fn().mockReturnValue(viewsQb) },
-        },
-        {
-          provide: getRepositoryToken(Venue),
-          useValue: { increment: jest.fn() },
         },
         {
           provide: getRepositoryToken(AnalyticsEvent),
