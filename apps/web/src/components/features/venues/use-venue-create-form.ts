@@ -11,17 +11,11 @@ import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { createVenue, uploadVenuePhoto } from '@/services/venues'
 import { ApiError } from '@/lib/api/parse'
-import { venueCreateSchema, csvToArray } from '@/lib/validation/venue'
+import { venueCreateSchema, csvToArray, DAY_LABELS } from '@/lib/validation/venue'
+import type { ContactField } from './venue-form-fieldsets'
 
 // Ліміт фото при поданні (решту можна додати у вкладці «Фото» кабінету)
 export const MAX_PHOTOS = 4
-
-// Людські назви днів: fieldLabel для по-полівних помилок годин + розмітка
-// філдсету «Години роботи» у формі
-export const DAY_LABELS: Record<string, string> = {
-  monday: 'Понеділок', tuesday: 'Вівторок', wednesday: 'Середа', thursday: 'Четвер',
-  friday: 'Пʼятниця', saturday: 'Субота', sunday: 'Неділя',
-}
 
 // Людські назви полів для по-полівних помилок (ключ — zod-issue path)
 const FIELD_LABELS: Record<string, string> = {
@@ -57,10 +51,12 @@ export function useVenueCreateForm() {
   const [latitude, setLatitude] = useState('')
   const [longitude, setLongitude] = useState('')
   const [description, setDescription] = useState('')
-  const [phone, setPhone] = useState('')
-  const [instagram, setInstagram] = useState('')
-  const [facebook, setFacebook] = useState('')
-  const [website, setWebsite] = useState('')
+  const [contacts, setContacts] = useState<Record<ContactField, string>>({
+    phone: '',
+    instagram: '',
+    facebook: '',
+    website: '',
+  })
   const [hours, setHours] = useState<Record<string, string>>({})
   const [averageCheck, setAverageCheck] = useState('')
   const [featureCodes, setFeatureCodes] = useState('')
@@ -71,6 +67,10 @@ export function useVenueCreateForm() {
   const [error, setError] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
 
+  function setContact(field: ContactField, value: string) {
+    setContacts((prev) => ({ ...prev, [field]: value }))
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError(null)
@@ -78,20 +78,16 @@ export function useVenueCreateForm() {
     const workingHours = Object.fromEntries(
       Object.entries(hours).filter(([, v]) => v.trim()),
     )
+    const contactsDto = Object.fromEntries(
+      (Object.entries(contacts) as [ContactField, string][]).filter(([, v]) => v.trim()),
+    )
     const dto = {
       name,
       address,
       latitude: latitude.trim() ? Number(latitude) : undefined,
       longitude: longitude.trim() ? Number(longitude) : undefined,
       description: description.trim() || undefined,
-      contacts: (phone.trim() || instagram.trim() || facebook.trim() || website.trim())
-        ? {
-            ...(phone.trim() ? { phone } : {}),
-            ...(instagram.trim() ? { instagram } : {}),
-            ...(facebook.trim() ? { facebook } : {}),
-            ...(website.trim() ? { website } : {}),
-          }
-        : undefined,
+      contacts: Object.keys(contactsDto).length ? contactsDto : undefined,
       workingHours: Object.keys(workingHours).length ? workingHours : undefined,
       averageCheck: averageCheck.trim() ? Number(averageCheck) : undefined,
       featureCodes: csvToArray(featureCodes).length ? csvToArray(featureCodes) : undefined,
@@ -146,7 +142,7 @@ export function useVenueCreateForm() {
     name, setName, address, setAddress,
     latitude, setLatitude, longitude, setLongitude,
     description, setDescription,
-    phone, setPhone, instagram, setInstagram, facebook, setFacebook, website, setWebsite,
+    contacts, setContact,
     hours, setHours, averageCheck, setAverageCheck,
     featureCodes, setFeatureCodes, tagSlugs, setTagSlugs, typeSlug, setTypeSlug,
     photos, addPhotos, removePhoto,

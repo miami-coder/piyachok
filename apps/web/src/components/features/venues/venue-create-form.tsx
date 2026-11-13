@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { FilePickerButton } from '@/components/ui/file-picker-button'
-import { WH_DAYS } from '@/lib/validation/venue'
-import { DAY_LABELS, MAX_PHOTOS, useVenueCreateForm } from './use-venue-create-form'
+import { ContactsFieldset, WorkingHoursFieldset } from './venue-form-fieldsets'
+import { MAX_PHOTOS, useVenueCreateForm } from './use-venue-create-form'
 
 // Зірочка — видимий маркер обовʼязковості, прихована від скрінрідера
 // (вимогу передає aria-required на інпуті). span2 — ширші поля 2-колоночної
@@ -51,7 +51,7 @@ export function VenueCreateForm() {
     name, setName, address, setAddress,
     latitude, setLatitude, longitude, setLongitude,
     description, setDescription,
-    phone, setPhone, instagram, setInstagram, facebook, setFacebook, website, setWebsite,
+    contacts, setContact,
     hours, setHours, averageCheck, setAverageCheck,
     featureCodes, setFeatureCodes, tagSlugs, setTagSlugs, typeSlug, setTypeSlug,
     photos, addPhotos, removePhoto,
@@ -126,39 +126,13 @@ export function VenueCreateForm() {
           className="mt-1 w-full"
         />
       </Field>
-      <fieldset className="rounded-xl border border-line p-3 sm:col-span-2">
-        <legend className="px-1 text-sm font-medium">Контакти</legend>
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Телефон" aria-label="Телефон" />
-          <Input value={instagram} onChange={(e) => setInstagram(e.target.value)} placeholder="Instagram" aria-label="Instagram" />
-          <Input value={facebook} onChange={(e) => setFacebook(e.target.value)} placeholder="Facebook" aria-label="Facebook" />
-          <Input value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="Сайт" aria-label="Сайт" />
-        </div>
-      </fieldset>
-      <fieldset className="rounded-xl border border-line p-3 sm:col-span-2">
-        <legend className="px-1 text-sm font-medium">Години роботи (формат HH:MM-HH:MM, порожнє — вихідний)</legend>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {WH_DAYS.map((d) => (
-            <label key={d} className="block text-xs text-muted">
-              {DAY_LABELS[d]}
-              <Input
-                value={hours[d] ?? ''}
-                onChange={(e) => setHours((h) => ({ ...h, [d]: e.target.value }))}
-                placeholder="10:00-22:00"
-                aria-label={`Години: ${DAY_LABELS[d]}`}
-                className="mt-0.5 w-full"
-              />
-            </label>
-          ))}
-        </div>
-        {WH_DAYS.map((d) =>
-          fieldErrors[`workingHours.${d}`] && (
-            <span key={`wh-${d}`} role="alert" className="block text-danger">
-              {fieldErrors[`workingHours.${d}`]}
-            </span>
-          ),
-        )}
-      </fieldset>
+      <ContactsFieldset contacts={contacts} onField={setContact} />
+      {/* По-днівні помилки валідації годин рендеряться всередині філдсету */}
+      <WorkingHoursFieldset
+        hours={hours}
+        onDay={(d, v) => setHours((h) => ({ ...h, [d]: v }))}
+        fieldErrors={fieldErrors}
+      />
       <Field id="vn-check" label="Середній чек (₴)" error={fieldErrors.averageCheck}>
         <Input
           id="vn-check"

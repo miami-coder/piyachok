@@ -2,6 +2,15 @@ import { z } from 'zod'
 
 export const WH_DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
 
+// Людські назви днів (uk) для філдсетів годин у формах закладу і текстів
+// помилок «Години роботи (День)». Єдине джерело: імпортують форми і показ
+// годин у карточці (working-hours.tsx).
+// Пʼятниця — типографський апостроф (U+2019), уникає \'-екранування.
+export const DAY_LABELS: Record<string, string> = {
+  monday: 'Понеділок', tuesday: 'Вівторок', wednesday: 'Середа', thursday: 'Четвер',
+  friday: 'П’ятниця', saturday: 'Субота', sunday: 'Неділя',
+}
+
 const timeRangeRe = /^\d{2}:\d{2}-\d{2}:\d{2}$/
 
 export function csvToArray(s: string): string[] {

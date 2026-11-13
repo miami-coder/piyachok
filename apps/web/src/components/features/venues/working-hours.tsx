@@ -1,12 +1,14 @@
-// Форми шлють повні ключі (monday…sunday), короткі (mon…sun) — запасний
-// формат від старих даних.
-const DAY_LABELS: Record<string, string> = {
-  monday: 'Понеділок', tuesday: 'Вівторок', wednesday: 'Середа', thursday: 'Четвер',
-  friday: 'П’ятниця', // U+2019 — типографський апостроф, уникає \'-екранування
-  saturday: 'Субота', sunday: 'Неділя',
+// Повні ключі (monday…sunday) — спільне джерело з формами
+// (lib/validation/venue); короткі (mon…sun) — запасний формат від старих
+// даних, дозаписуємо поверх.
+import { DAY_LABELS } from '@/lib/validation/venue'
+
+const DAY_LABELS_EXTRA: Record<string, string> = {
   mon: 'Понеділок', tue: 'Вівторок', wed: 'Середа', thu: 'Четвер',
   fri: 'П’ятниця', sat: 'Субота', sun: 'Неділя',
 }
+
+const DAY_LABELS_ALL = { ...DAY_LABELS, ...DAY_LABELS_EXTRA }
 
 // Канонічний порядок тижня: понеділок → неділя (як бекенд словник не
 // повертає, наприклад {sun, sat, mon…} — сортуємо за цим списком)
@@ -29,7 +31,7 @@ export function WorkingHours({ hours }: { hours: Record<string, string> }) {
     <dl className="space-y-1 text-sm">
       {[...entries].sort(([a], [b]) => rank(a) - rank(b)).map(([day, value]) => (
         <div key={day} className="flex justify-between gap-4">
-          <dt className="text-muted">{DAY_LABELS[day.toLowerCase()] ?? day}</dt>
+          <dt className="text-muted">{DAY_LABELS_ALL[day.toLowerCase()] ?? day}</dt>
           <dd>{value}</dd>
         </div>
       ))}
