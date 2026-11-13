@@ -1,8 +1,16 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Repository } from 'typeorm';
-import { Venue, VenueStatus } from './entities/venue.entity';
+import {
+  Venue,
+  VenueStatus,
+  canTransitionVenue,
+} from './entities/venue.entity';
 import { VenuesService } from './venues.service';
 import { RoleGrantsService } from '../rbac/role-grants.service';
 import { USER_ROLE_ADDED } from '../rbac/listeners/user-role.listener';
@@ -66,9 +74,16 @@ export class VenuesAdminService {
     return { data, meta: buildMeta({ page, limit, offset }, total) };
   }
 
+  /** Перехід статусу з валідацією життєвого циклу: недопустимий перехід
+   *  (термінальний archived, повторний reject, reject схваленого) — 409,
+   *  подія емітується лише при реальній зміні статусу. */
   async changeStatus(venueId: string, to: VenueStatus): Promise<Venue> {
     const venue = await this.venueService.findOneOrThrow(venueId);
     const from = venue.status;
+    if (!canTransitionVenue(from, to))
+      throw new ConflictException(
+        `Недопустимий перехід статусу закладу: ${from} → ${to}`,
+      );
     venue.status = to;
     await this.venues.save(venue);
     this.events.emit(
@@ -78,14 +93,15 @@ export class VenuesAdminService {
     return venue;
   }
 
-  // Апрув: статус → approved + власник отримує роль venue_admin
-  // (ідемпотентно). Атомарно: статус, роль і запис аудиту — в одній
-  // транзакції (падіння видачі ролі відкочує статус, заклад не лишається
-  // «схваленим без ролі власнику»). Події — після коміту.
-  // Ручна видача ролей супер-адміном лишається незалежною.
-  // Видалений (archived) заклад апрувнути не можна.
+  // Апрув допустимий з pending і rejected (модератор передумав). Повторний
+  // апрув схваленого — 409, видаленого — 403. Атомарно: статус, роль і
+  // запис аудиту — в одній транзакції (падіння видачі ролі відкочує
+  // статус, заклад не лишається «схваленим без ролі власнику»).
+  // Події — після коміту. Ручна видача ролей супер-адміном лишається незалежною.
   async approve(actorId: string, venueId: string): Promise<Venue> {
     const current = await this.venueService.findOneOrThrow(venueId);
+    if (current.status === VenueStatus.Approved)
+      throw new ConflictException('Заклад уже схвалений');
     if (current.status === VenueStatus.Archived)
       throw new ForbiddenException('Видалений заклад не можна підтвердити');
     const from = current.status;

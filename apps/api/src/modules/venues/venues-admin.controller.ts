@@ -10,6 +10,7 @@ import {
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConflictResponse,
   ApiForbiddenResponse,
   ApiNotFoundResponse,
   ApiOperation,
@@ -75,6 +76,7 @@ export class VenuesAdminController {
   @ApiDataResponse({ type: Venue, description: 'Схвалений заклад' })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу venue:moderate' })
+  @ApiConflictResponse({ description: 'Заклад уже схвалений' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   approve(@CurrentUser() u: JwtUser, @Param('id', ParseUuidPipe) id: string) {
     return this.venues.approve(u.sub, id).then((v) => ({ data: v }));
@@ -86,6 +88,9 @@ export class VenuesAdminController {
   @ApiDataResponse({ type: Venue, description: 'Відхилений заклад' })
   @ApiUnauthorizedResponse({ description: 'Не авторизований' })
   @ApiForbiddenResponse({ description: 'Немає дозволу venue:moderate' })
+  @ApiConflictResponse({
+    description: 'Заклад уже відхилений/схвалений або видалений',
+  })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   reject(@Param('id', ParseUuidPipe) id: string) {
     return this.venues

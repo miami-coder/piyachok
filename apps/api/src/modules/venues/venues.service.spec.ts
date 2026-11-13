@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -338,7 +339,7 @@ describe('VenuesService', () => {
     });
   });
 
-  it('softDelete архівує заклад власника', async () => {
+  it('softDelete архівує заклад власника, подія несе реальний попередній статус', async () => {
     const venue = {
       id: 'v1',
       ownerId: 'u1',
@@ -350,8 +351,42 @@ describe('VenuesService', () => {
     expect(venues.save).toHaveBeenCalledWith(venue);
     expect(events.emit).toHaveBeenCalledWith(
       'venue.status_changed',
-      expect.anything(),
+      expect.objectContaining({
+        venueId: 'v1',
+        from: VenueStatus.Approved,
+        to: VenueStatus.Archived,
+      }),
     );
+  });
+
+  it('softDelete pending-заявки: подія з from: pending, а не approved', async () => {
+    const venue = {
+      id: 'v2',
+      ownerId: 'u1',
+      status: VenueStatus.Pending,
+    };
+    venues.findOne.mockResolvedValueOnce(venue);
+    await service.softDelete('u1', 'v2');
+    expect(events.emit).toHaveBeenCalledWith(
+      'venue.status_changed',
+      expect.objectContaining({
+        from: VenueStatus.Pending,
+        to: VenueStatus.Archived,
+      }),
+    );
+  });
+
+  it('повторне softDelete видаленого закладу — 409, без події', async () => {
+    venues.findOne.mockResolvedValueOnce({
+      id: 'v1',
+      ownerId: 'u1',
+      status: VenueStatus.Archived,
+    });
+    await expect(service.softDelete('u1', 'v1')).rejects.toThrow(
+      ConflictException,
+    );
+    expect(venues.save).not.toHaveBeenCalled();
+    expect(events.emit).not.toHaveBeenCalled();
   });
 
   it('softDelete дозволений супер-адміну (venue:edit:any)', async () => {

@@ -1,7 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ForbiddenException } from '@nestjs/common';
+import { ConflictException, ForbiddenException } from '@nestjs/common';
 import { VenuesAdminService } from './venues-admin.service';
 import { VenuesService } from './venues.service';
 import { Venue, VenueStatus } from './entities/venue.entity';
@@ -56,6 +56,25 @@ describe('VenuesAdminService', () => {
       );
     });
 
+    it.each([
+      [VenueStatus.Approved, 'схвалений — повторний reject'],
+      [VenueStatus.Rejected, 'відхилений — повторний reject'],
+      [VenueStatus.Archived, 'видалений — «воскресіння» в rejected'],
+    ])(
+      'changeStatus на %s кидає 409 і не емітить подію',
+      async (from, _label) => {
+        core.findOneOrThrow.mockResolvedValueOnce({
+          id: 'v1',
+          status: from,
+        });
+        await expect(
+          service.changeStatus('v1', VenueStatus.Rejected),
+        ).rejects.toThrow(ConflictException);
+        expect(venues.save).not.toHaveBeenCalled();
+        expect(events.emit).not.toHaveBeenCalled();
+      },
+    );
+
     it('апрув видаленого (archived) закладу заборонений', async () => {
       core.findOneOrThrow.mockResolvedValueOnce({
         id: 'v1',
@@ -66,6 +85,20 @@ describe('VenuesAdminService', () => {
         ForbiddenException,
       );
       expect(venues.save).not.toHaveBeenCalled();
+    });
+
+    it('повторний апрув схваленого закладу — 409, без події/аудиту', async () => {
+      core.findOneOrThrow.mockResolvedValueOnce({
+        id: 'v1',
+        status: VenueStatus.Approved,
+        ownerId: 'u1',
+      });
+      await expect(service.approve('admin1', 'v1')).rejects.toThrow(
+        new ConflictException('Заклад уже схвалений'),
+      );
+      expect(venues.save).not.toHaveBeenCalled();
+      expect(events.emit).not.toHaveBeenCalled();
+      expect(audit.log).not.toHaveBeenCalled();
     });
 
     it('approve змінює статус і видає власнику роль venue_admin', async () => {
@@ -124,6 +157,26 @@ describe('VenuesAdminService', () => {
       roleGrants.grant.mockResolvedValueOnce(false); // вже видана
       await service.approve('admin1', 'v1');
       expect(roleGrants.grant).toHaveBeenCalledTimes(1);
+    });
+
+    it('апрув відхиленого закладу дозволений: rejected → approved', async () => {
+      core.findOneOrThrow
+        .mockResolvedValueOnce({
+          id: 'v1',
+          ownerId: 'u1',
+          status: VenueStatus.Rejected,
+        })
+        .mockResolvedValueOnce({
+          id: 'v1',
+          ownerId: 'u1',
+          status: VenueStatus.Rejected,
+        });
+      const v = await service.approve('admin1', 'v1');
+      expect(v.status).toBe(VenueStatus.Approved);
+      expect(events.emit).toHaveBeenCalledWith(
+        'venue.status_changed',
+        expect.anything(),
+      );
     });
   });
 

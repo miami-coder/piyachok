@@ -22,6 +22,25 @@ export enum VenueStatus {
   Archived = 'archived',
 }
 
+/** Дозволені переходи життєвого циклу закладу. Archived — термінальний
+ *  стан: з нього не виходять, повторні апрув/reject/видалення неможливі. */
+export const VENUE_TRANSITIONS: Partial<Record<VenueStatus, VenueStatus[]>> = {
+  [VenueStatus.Pending]: [
+    VenueStatus.Approved,
+    VenueStatus.Rejected,
+    VenueStatus.Archived,
+  ],
+  [VenueStatus.Rejected]: [VenueStatus.Approved, VenueStatus.Archived],
+  [VenueStatus.Approved]: [VenueStatus.Archived],
+};
+
+export function canTransitionVenue(
+  from: VenueStatus,
+  to: VenueStatus,
+): boolean {
+  return VENUE_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
 @Entity('venues')
 @Index(['status'])
 export class Venue {

@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -6,7 +7,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { Venue, VenueStatus } from './entities/venue.entity';
+import {
+  Venue,
+  VenueStatus,
+  canTransitionVenue,
+} from './entities/venue.entity';
 import { VenuePhoto } from './entities/venue-photo.entity';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
@@ -151,14 +156,19 @@ export class VenuesService {
     return out as T;
   }
 
+  /** М'яке видалення: pending/approved/rejected → archived. Повторне
+   *  видалення видаленого — 409; подія несе реальний попередній статус. */
   async softDelete(userId: string, venueId: string): Promise<void> {
     const venue = await this.findOneOrThrow(venueId);
     await this.assertCanEdit(userId, venue);
+    const from = venue.status;
+    if (!canTransitionVenue(from, VenueStatus.Archived))
+      throw new ConflictException('Заклад уже видалений');
     venue.status = VenueStatus.Archived;
     await this.venues.save(venue);
     this.events.emit(
       VENUE_STATUS_CHANGED,
-      new VenueStatusChangedEvent(venue.id, 'approved', 'archived'),
+      new VenueStatusChangedEvent(venue.id, from, VenueStatus.Archived),
     );
   }
 
