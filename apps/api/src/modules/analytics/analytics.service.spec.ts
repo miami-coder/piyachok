@@ -14,6 +14,7 @@ describe('AnalyticsService', () => {
   let views: any;
   let eventsRepo: any;
   let cache: any;
+  let venuesService: any;
 
   beforeEach(async () => {
     views = {
@@ -43,6 +44,11 @@ describe('AnalyticsService', () => {
       }),
     };
     cache = { get: jest.fn(), set: jest.fn().mockResolvedValue(undefined) };
+    venuesService = {
+      findOneOrThrow: jest
+        .fn()
+        .mockResolvedValue({ id: 'v1', status: 'approved' }),
+    };
     const module = await Test.createTestingModule({
       providers: [
         AnalyticsService,
@@ -53,7 +59,7 @@ describe('AnalyticsService', () => {
         },
         { provide: getRepositoryToken(AnalyticsEvent), useValue: eventsRepo },
         { provide: CacheService, useValue: cache },
-        { provide: VenuesService, useValue: { findOneOrThrow: jest.fn() } },
+        { provide: VenuesService, useValue: venuesService },
         {
           provide: PermissionsService,
           useValue: { hasPermission: jest.fn().mockResolvedValue(true) },
@@ -98,6 +104,41 @@ describe('AnalyticsService', () => {
     const second = await service.recordView('v1', null, null, '203.0.113.7');
     expect(second).toEqual({ recorded: false });
     expect(views.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('recordView неіснуючого закладу — 404, запису і дедуп-ключа немає', async () => {
+    venuesService.findOneOrThrow.mockRejectedValue(
+      new NotFoundException('Заклад не знайдено'),
+    );
+    await expect(service.recordView('v-ghost', 'u1')).rejects.toThrow(
+      'Заклад не знайдено',
+    );
+    expect(views.save).not.toHaveBeenCalled();
+    expect(cache.get).not.toHaveBeenCalled();
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
+  it('recordView несхваленого закладу — 404, як на публічному читанні', async () => {
+    venuesService.findOneOrThrow.mockResolvedValue({
+      id: 'v1',
+      status: 'pending',
+    });
+    await expect(service.recordView('v1', 'u1')).rejects.toThrow(
+      'Заклад не знайдено',
+    );
+    expect(views.save).not.toHaveBeenCalled();
+    expect(cache.set).not.toHaveBeenCalled();
+  });
+
+  it('при падінні запису дедуп-ключ не спалюється — ретрай можливий', async () => {
+    cache.get.mockResolvedValue(null);
+    views.save.mockRejectedValueOnce(new Error('db down'));
+    await expect(service.recordView('v1', 'u1')).rejects.toThrow('db down');
+    expect(cache.set).not.toHaveBeenCalled();
+    // ретрай після відновлення записує перегляд, а не відсікається дедупом
+    views.save.mockResolvedValueOnce(undefined);
+    const retry = await service.recordView('v1', 'u1');
+    expect(retry).toEqual({ recorded: true });
   });
 
   it('recordEvent persists analytics event', async () => {
@@ -200,7 +241,14 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
         },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
         { provide: getRepositoryToken(Venue), useValue: venues },
-        { provide: VenuesService, useValue: { findOneOrThrow: jest.fn() } },
+        {
+          provide: VenuesService,
+          useValue: {
+            findOneOrThrow: jest
+              .fn()
+              .mockResolvedValue({ id: 'v1', status: 'approved' }),
+          },
+        },
         {
           provide: PermissionsService,
           useValue: { hasPermission: jest.fn().mockResolvedValue(true) },
@@ -234,7 +282,14 @@ describe('AnalyticsService.recordView — лічильник закладу', ()
         },
         { provide: CacheService, useValue: cache },
         { provide: getRepositoryToken(Venue), useValue: venues },
-        { provide: VenuesService, useValue: { findOneOrThrow: jest.fn() } },
+        {
+          provide: VenuesService,
+          useValue: {
+            findOneOrThrow: jest
+              .fn()
+              .mockResolvedValue({ id: 'v1', status: 'approved' }),
+          },
+        },
         {
           provide: PermissionsService,
           useValue: { hasPermission: jest.fn().mockResolvedValue(true) },

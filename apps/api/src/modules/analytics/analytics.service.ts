@@ -1,9 +1,13 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { VenueView } from './entities/venue-view.entity';
 import { AnalyticsEvent } from './entities/analytics-event.entity';
-import { Venue } from '../venues/entities/venue.entity';
+import { Venue, VenueStatus } from '../venues/entities/venue.entity';
 import { CacheService } from '../../common/services/cache.service';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
@@ -36,14 +40,20 @@ export class AnalyticsService {
     sessionId?: string | null,
     clientIp?: string | null,
   ): Promise<{ recorded: boolean }> {
+    // Перегляд буває тільки на публічній сторінці закладу: він має існувати
+    // і бути схваленим — інакше 404 так само, як на публічному читанні
+    // (findOnePublic несхвалені показує як «не знайдено»). Без цієї перевірки
+    // FK на venue_views давав би 500 на неіснуючому id.
+    const venue = await this.venuesService.findOneOrThrow(venueId);
+    if (venue.status !== VenueStatus.Approved)
+      throw new NotFoundException('Заклад не знайдено');
     // Дедуп не залежить виключно від клієнта: коли немає ані userId, ані
     // sessionId, контролер передає клієнтський IP як фолбек-ідентичність.
     const identity = userId ?? sessionId ?? clientIp;
-    if (identity) {
-      const dedupKey = `view:dedup:${identity}:${venueId}`;
+    const dedupKey = identity ? `view:dedup:${identity}:${venueId}` : null;
+    if (dedupKey) {
       const seen = await this.cache.get<string>(dedupKey);
       if (seen) return { recorded: false };
-      await this.cache.set(dedupKey, '1', VIEW_DEDUP_TTL);
     }
     await this.views.save({
       venueId,
@@ -52,6 +62,9 @@ export class AnalyticsService {
     });
     // Лічильник закладу ніколи не оновлювався і був завжди 0
     await this.venues.increment({ id: venueId }, 'viewCount', 1);
+    // Ключ дедупу ставимо тільки після успішного запису: якщо збереження
+    // впало, ідентичність не спалена на TTL і ретрай можливий
+    if (dedupKey) await this.cache.set(dedupKey, '1', VIEW_DEDUP_TTL);
     return { recorded: true };
   }
 
