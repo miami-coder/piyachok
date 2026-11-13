@@ -4,20 +4,21 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
 import { TokenService } from './jwt.service';
 import { UsersService } from '../../users/users.service';
 import { UserRole } from '../../rbac/entities/user-role.entity';
-import { Role } from '../../rbac/entities/role.entity';
+import { RoleGrantsService } from '../../rbac/role-grants.service';
 import { CacheService } from '../../../common/services/cache.service';
 
 describe('AuthService', () => {
   let service: AuthService;
   let users: any;
   let userRoles: any;
+  let grants: any;
   let tokens: any;
   let cache: any;
 
@@ -47,6 +48,7 @@ describe('AuthService', () => {
       },
       save: jest.fn().mockResolvedValue(undefined),
     };
+    grants = { grant: jest.fn().mockResolvedValue(true) };
     tokens = {
       signAccess: jest.fn().mockReturnValue('access-tok'),
       signRefresh: jest.fn().mockReturnValue('refresh-tok'),
@@ -62,19 +64,11 @@ describe('AuthService', () => {
       imports: [JwtModule.register({})],
       providers: [
         AuthService,
-        {
-          provide: getRepositoryToken(Role),
-          useValue: {
-            findOne: jest
-              .fn()
-              .mockResolvedValue({ id: 'r-user', code: 'user' }),
-          },
-        },
         { provide: TokenService, useValue: tokens },
         { provide: UsersService, useValue: users },
         { provide: getRepositoryToken(UserRole), useValue: userRoles },
+        { provide: RoleGrantsService, useValue: grants },
         { provide: CacheService, useValue: cache },
-        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
     }).compile();
     service = module.get(AuthService);
@@ -92,7 +86,7 @@ describe('AuthService', () => {
     ).rejects.toThrow(BadRequestException);
   });
 
-  it('register creates user, assigns user role, returns tokens', async () => {
+  it('register creates user, assigns role via RoleGrantsService, returns tokens', async () => {
     const res = await service.register({
       email: 'A@B.com',
       password: 'Password1',
@@ -101,12 +95,23 @@ describe('AuthService', () => {
       acceptEula: true,
     });
     expect(users.create).toHaveBeenCalled();
-    expect(userRoles.save).toHaveBeenCalledWith({
-      userId: 'u-new',
-      roleId: 'r-user',
-    });
+    expect(grants.grant).toHaveBeenCalledWith('u-new', 'user');
+    expect(userRoles.save).not.toHaveBeenCalled();
     expect(res.accessToken).toBe('access-tok');
     expect(res.user.roles).toEqual(['user']);
+  });
+
+  it('register без базової ролі → 500 (реєстрація не проходить мовчки)', async () => {
+    grants.grant.mockResolvedValueOnce(false);
+    await expect(
+      service.register({
+        email: 'A@B.com',
+        password: 'Password1',
+        firstname: 'A',
+        lastname: 'B',
+        acceptEula: true,
+      }),
+    ).rejects.toThrow(InternalServerErrorException);
   });
 
   it('login throws on unknown email', async () => {
@@ -211,7 +216,6 @@ describe('AuthService — видалення юзера фінальне', () =>
   let userRoles: any;
   let tokens: any;
   let cache: any;
-  let events: any;
 
   beforeEach(async () => {
     users = {
@@ -233,23 +237,14 @@ describe('AuthService — видалення юзера фінальне', () =>
       del: jest.fn().mockResolvedValue(undefined),
       setIfNotExists: jest.fn().mockResolvedValue(true),
     };
-    events = { emit: jest.fn() };
     const module = await Test.createTestingModule({
       providers: [
         AuthService,
         { provide: UsersService, useValue: users },
         { provide: getRepositoryToken(UserRole), useValue: userRoles },
-        {
-          provide: getRepositoryToken(Role),
-          useValue: {
-            findOne: jest
-              .fn()
-              .mockResolvedValue({ id: 'r-user', code: 'user' }),
-          },
-        },
+        { provide: RoleGrantsService, useValue: { grant: jest.fn() } },
         { provide: TokenService, useValue: tokens },
         { provide: CacheService, useValue: cache },
-        { provide: EventEmitter2, useValue: events },
       ],
     }).compile();
     service = module.get(AuthService);

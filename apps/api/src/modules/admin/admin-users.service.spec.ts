@@ -8,6 +8,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AdminUsersService } from './admin-users.service';
 import { AuditService } from './audit.service';
+import { RoleGrantsService } from '../rbac/role-grants.service';
 import { User } from '../users/entities/user.entity';
 import { Profile } from '../users/entities/profile.entity';
 import { UserRole } from '../rbac/entities/user-role.entity';
@@ -33,6 +34,7 @@ describe('AdminUsersService', () => {
   let roles: any;
   let audit: any;
   let events: any;
+  let grants: any;
 
   beforeEach(async () => {
     users = makeRepo();
@@ -41,6 +43,7 @@ describe('AdminUsersService', () => {
     roles = makeRepo();
     audit = { log: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
+    grants = { grant: jest.fn().mockResolvedValue(true) };
     const module = await Test.createTestingModule({
       providers: [
         AdminUsersService,
@@ -50,6 +53,7 @@ describe('AdminUsersService', () => {
         { provide: getRepositoryToken(Role), useValue: roles },
         { provide: AuditService, useValue: audit },
         { provide: EventEmitter2, useValue: events },
+        { provide: RoleGrantsService, useValue: grants },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
       ],
     }).compile();
@@ -222,16 +226,16 @@ describe('AdminUsersService', () => {
   });
 
   describe('assignRole', () => {
-    it('adds role when action=add and not existing', async () => {
+    it('adds role when action=add: запис іде через RoleGrantsService', async () => {
       roles.findOne.mockResolvedValue({ id: 'r1', code: 'admin' });
-      userRoles.findOne.mockResolvedValue(null);
       const res = await service.assignRole('admin', 'u1', 'admin', 'add');
       expect(res.data).toEqual({ id: 'u1', roleCode: 'admin', action: 'add' });
-      expect(userRoles.save).toHaveBeenCalledWith({
-        userId: 'u1',
-        roleId: 'r1',
+      expect(grants.grant).toHaveBeenCalledWith('u1', 'admin', {
         assignedBy: 'admin',
       });
+      expect(userRoles.save).not.toHaveBeenCalled();
+      // подія user_role.added — робота RoleGrantsService, не цього сервісу
+      expect(events.emit).not.toHaveBeenCalled();
       expect(audit.log).toHaveBeenCalledWith(
         'admin',
         'assign_role',
@@ -240,19 +244,17 @@ describe('AdminUsersService', () => {
         null,
         { roleCode: 'admin' },
       );
-      expect(events.emit).toHaveBeenCalledWith('user_role.added', {
-        userId: 'u1',
-      });
     });
 
-    it('skips save when role already assigned (event still emitted)', async () => {
+    it('no-op видачі (роль уже була) не пише і не чіпає кеш', async () => {
       roles.findOne.mockResolvedValue({ id: 'r1', code: 'admin' });
-      userRoles.findOne.mockResolvedValue({ userId: 'u1', roleId: 'r1' });
+      grants.grant.mockResolvedValue(false);
       await service.assignRole('admin', 'u1', 'admin', 'add');
-      expect(userRoles.save).not.toHaveBeenCalled();
-      expect(events.emit).toHaveBeenCalledWith('user_role.added', {
-        userId: 'u1',
+      expect(grants.grant).toHaveBeenCalledWith('u1', 'admin', {
+        assignedBy: 'admin',
       });
+      expect(userRoles.save).not.toHaveBeenCalled();
+      expect(events.emit).not.toHaveBeenCalled();
     });
 
     it('removes role when action=remove', async () => {

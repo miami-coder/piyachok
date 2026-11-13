@@ -1,9 +1,9 @@
 import {
   BadRequestException,
   Injectable,
+  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UsersService } from '../../users/users.service';
 import { UserRole } from '../../rbac/entities/user-role.entity';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -12,8 +12,7 @@ import { TokenService } from './jwt.service';
 import { CacheService } from '../../../common/services/cache.service';
 import { RegisterDto } from '../dto/register.dto';
 import { LoginDto } from '../dto/login.dto';
-import { Role } from '../../rbac/entities/role.entity';
-import { USER_ROLE_ADDED } from '../../rbac/listeners/user-role.listener';
+import { RoleGrantsService } from '../../rbac/role-grants.service';
 
 @Injectable()
 export class AuthService {
@@ -21,10 +20,9 @@ export class AuthService {
     private readonly users: UsersService,
     @InjectRepository(UserRole)
     private readonly userRoles: Repository<UserRole>,
-    @InjectRepository(Role) private readonly roleRepo: Repository<Role>,
+    private readonly grants: RoleGrantsService,
     private readonly tokens: TokenService,
     private readonly cache: CacheService,
-    private readonly events: EventEmitter2,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -34,11 +32,12 @@ export class AuthService {
     }
     const user = await this.users.create(dto);
 
-    // Призначаємо роль 'user'
-    const role = await this.roleRepo.findOne({ where: { code: 'user' } });
-    if (role) {
-      await this.userRoles.save({ userId: user.id, roleId: role.id });
-      this.events.emit(USER_ROLE_ADDED, { userId: user.id });
+    // Призначаємо роль 'user' через єдину точку видачі ролей. Відсутність
+    // базової ролі — це зламаний стенд, реєстрація не може пройти мовчки.
+    if (!(await this.grants.grant(user.id, 'user'))) {
+      throw new InternalServerErrorException(
+        'Базову роль не налаштовано — зверніться до адміністрації',
+      );
     }
 
     const roles = await this.getUserRoles(user.id);

@@ -9,13 +9,12 @@ import { USER_ROLE_ADDED } from './listeners/user-role.listener';
 /**
  * Ідемпотентна видача ролі за кодом.
  *
- * Єдине місце, куди модулі доменів (наприклад, venues: апрув закладу /
- * призначення власника) звертаються за видачею ролі — самі вони ролей не
- * зберігають. Роль, якої немає в системі, або яку користувач уже має — це
- * no-op (false), записи не дублюються.
+ * Єдине місце, яке пише UserRole в рантаймі: модулі доменів (venues: апрув
+ * закладу / призначення власника), адмін-керування юзерами та реєстрація.
+ * Роль, яку користувач уже має, — це no-op (false), записи не дублюються.
  *
  * Скидання кешу пермішенів тут не робиться: UserRoleListener робить це за
- * подією user_role.added (та сама схема, що й в AdminUsersService).
+ * подією user_role.added.
  */
 @Injectable()
 export class RoleGrantsService {
@@ -27,15 +26,27 @@ export class RoleGrantsService {
     private readonly events: EventEmitter2,
   ) {}
 
-  /** true — роль щойно видана; false — вже була або ролі з таким кодом немає. */
-  async grant(userId: string, roleCode: string): Promise<boolean> {
+  /**
+   * true — роль щойно видана; false — вже була або ролі з таким кодом немає.
+   * assignedBy — хто видав (адмін із панелі); для системних видач
+   * (реєстрація, апрув закладу) передається як null/undefined.
+   */
+  async grant(
+    userId: string,
+    roleCode: string,
+    opts?: { assignedBy?: string | null },
+  ): Promise<boolean> {
     const role = await this.roles.findOne({ where: { code: roleCode } });
     if (!role) return false;
     const existing = await this.userRoles.findOne({
       where: { userId, roleId: role.id },
     });
     if (existing) return false;
-    await this.userRoles.save({ userId, roleId: role.id });
+    await this.userRoles.save({
+      userId,
+      roleId: role.id,
+      assignedBy: opts?.assignedBy ?? null,
+    });
     // подію емітуємо лише при реальній видачі — при no-op кеш чіпати не треба
     this.events.emit(USER_ROLE_ADDED, { userId });
     return true;

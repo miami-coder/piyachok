@@ -17,10 +17,8 @@ import { UserRole } from '../rbac/entities/user-role.entity';
 import { RoleCode } from '../rbac/entities/role.enum';
 import { Role } from '../rbac/entities/role.entity';
 import { AuditService } from './audit.service';
-import {
-  USER_ROLE_ADDED,
-  USER_ROLE_REMOVED,
-} from '../rbac/listeners/user-role.listener';
+import { USER_ROLE_REMOVED } from '../rbac/listeners/user-role.listener';
+import { RoleGrantsService } from '../rbac/role-grants.service';
 import { CacheService } from '../../common/services/cache.service';
 
 /**
@@ -37,6 +35,7 @@ export class AdminUsersService {
     @InjectRepository(Role) private readonly roles: Repository<Role>,
     private readonly audit: AuditService,
     private readonly events: EventEmitter2,
+    private readonly grants: RoleGrantsService,
     private readonly cache: CacheService,
   ) {}
 
@@ -110,8 +109,10 @@ export class AdminUsersService {
     return { data: { id } };
   }
 
-  /** Призначити/зняти роль — семантика 1-в-1 з попереднього контролера
-   *  (assignedBy, події user_role.added/removed, порядок audit-аргументів). */
+  /** Призначити/зняти роль. Запис ролі йде через RoleGrantsService — він
+   *  емитить user_role.added лише при реальній видачі (при no-op кеш
+   *  пермішенів чіпати не треба). Аудит, 404 на невідому роль і захист
+   *  останнього супер-адміна живуть тут, у адмін-сервісі. */
   async assignRole(
     actorId: string,
     id: string,
@@ -121,20 +122,10 @@ export class AdminUsersService {
     const role = await this.roles.findOne({ where: { code: roleCode } });
     if (!role) throw new NotFoundException('Роль не знайдено');
     if (action === 'add') {
-      const existing = await this.userRoles.findOne({
-        where: { userId: id, roleId: role.id },
-      });
-      if (!existing) {
-        await this.userRoles.save({
-          userId: id,
-          roleId: role.id,
-          assignedBy: actorId,
-        });
-      }
+      await this.grants.grant(id, role.code, { assignedBy: actorId });
       await this.audit.log(actorId, 'assign_role', 'user', id, null, {
         roleCode: role.code,
       });
-      this.events.emit(USER_ROLE_ADDED, { userId: id });
     } else {
       // Захист: у системі має залишатися хоч один активний супер-адмін.
       if (role.code === RoleCode.SuperAdmin) {

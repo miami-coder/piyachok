@@ -35,8 +35,20 @@ describe('RoleGrantsService', () => {
     expect(userRoles.save).toHaveBeenCalledWith({
       userId: 'u1',
       roleId: 'r1',
+      assignedBy: null,
     });
     expect(events.emit).toHaveBeenCalledWith(USER_ROLE_ADDED, { userId: 'u1' });
+  });
+
+  it('видана адміном роль зберігає assignedBy', async () => {
+    roles.findOne.mockResolvedValueOnce({ id: 'r1', code: 'admin' });
+    userRoles.findOne.mockResolvedValueOnce(null);
+    await service.grant('u2', 'admin', { assignedBy: 'a1' });
+    expect(userRoles.save).toHaveBeenCalledWith({
+      userId: 'u2',
+      roleId: 'r1',
+      assignedBy: 'a1',
+    });
   });
 
   it('ідемпотентність: роль уже видана — жодних записів і подій', async () => {
