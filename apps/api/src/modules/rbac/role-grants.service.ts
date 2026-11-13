@@ -4,7 +4,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { EntityManager, Repository } from 'typeorm';
 import { Role } from './entities/role.entity';
 import { UserRole } from './entities/user-role.entity';
-import { USER_ROLE_ADDED } from './listeners/user-role.listener';
+import { USER_ROLE_ADDED, type UserRoleAddedEvent } from './events';
 
 /**
  * Ідемпотентна видача ролі за кодом.
@@ -57,7 +57,10 @@ export class RoleGrantsService {
     const mgr = opts?.em ?? this.userRoles.manager;
     await mgr.save(UserRole, values);
     // подію емітуємо лише при реальній видачі — при no-op кеш чіпати не треба
-    if (!opts?.em) this.events.emit(USER_ROLE_ADDED, { userId });
+    if (!opts?.em)
+      this.events.emit(USER_ROLE_ADDED, {
+        userId,
+      } satisfies UserRoleAddedEvent);
     return true;
   }
 }

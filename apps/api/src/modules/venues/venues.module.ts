@@ -15,7 +15,6 @@ import { VenuesAdminService } from './venues-admin.service';
 import { RbacModule } from '../rbac/rbac.module';
 import { UsersModule } from '../users/users.module';
 import { AdminModule } from '../admin/admin.module';
-import { VenueCacheListener } from './listeners/venue-cache.listener';
 import { VenuesController } from './venues.controller';
 import { VenuesAdminController } from './venues-admin.controller';
 import { MeVenuesController } from './me-venues.controller';
@@ -42,7 +41,6 @@ import { MeVenuesController } from './me-venues.controller';
     VenueTaxonomyService,
     VenuesCatalogService,
     VenuesAdminService,
-    VenueCacheListener,
   ],
   exports: [
     VenuesService,

@@ -25,7 +25,7 @@ describe('VenuesAdminService', () => {
         transaction: jest.fn(async (cb: any) => cb(venues)),
       },
     };
-    core = { findOneOrThrow: jest.fn() };
+    core = { findOneOrThrow: jest.fn(), invalidateCatalogCache: jest.fn() };
     roleGrants = { grant: jest.fn().mockResolvedValue(false) };
     audit = { log: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
@@ -43,7 +43,7 @@ describe('VenuesAdminService', () => {
   });
 
   describe('зміна статусу', () => {
-    it('changeStatus пише статус і емітує подію venue.status_changed', async () => {
+    it('changeStatus пише статус, емітує подію venue.status_changed і скидає кеш каталогу', async () => {
       core.findOneOrThrow.mockResolvedValueOnce({
         id: 'v1',
         status: VenueStatus.Pending,
@@ -54,6 +54,7 @@ describe('VenuesAdminService', () => {
         'venue.status_changed',
         expect.anything(),
       );
+      expect(core.invalidateCatalogCache).toHaveBeenCalledTimes(1);
     });
 
     it.each([
@@ -131,6 +132,7 @@ describe('VenuesAdminService', () => {
         userId: 'u1',
       });
       expect(events.emit).toHaveBeenCalledTimes(2);
+      expect(core.invalidateCatalogCache).toHaveBeenCalledTimes(1);
       expect(audit.log).toHaveBeenCalledWith(
         'admin1',
         'venue_approve',

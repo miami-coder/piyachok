@@ -17,7 +17,7 @@ import { UserRole } from '../rbac/entities/user-role.entity';
 import { RoleCode } from '../rbac/entities/role.enum';
 import { Role } from '../rbac/entities/role.entity';
 import { AuditService } from './audit.service';
-import { USER_ROLE_REMOVED } from '../rbac/listeners/user-role.listener';
+import { USER_ROLE_REMOVED, type UserRoleRemovedEvent } from '../rbac/events';
 import { RoleGrantsService } from '../rbac/role-grants.service';
 import { CacheService } from '../../common/services/cache.service';
 
@@ -155,7 +155,9 @@ export class AdminUsersService {
         { roleCode: role.code },
         null,
       );
-      this.events.emit(USER_ROLE_REMOVED, { userId: id });
+      this.events.emit(USER_ROLE_REMOVED, {
+        userId: id,
+      } satisfies UserRoleRemovedEvent);
     }
     return { data: { id, roleCode: role.code, action } };
   }

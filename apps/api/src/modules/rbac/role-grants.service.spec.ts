@@ -5,7 +5,7 @@ import { EntityManager } from 'typeorm';
 import { RoleGrantsService } from './role-grants.service';
 import { Role } from './entities/role.entity';
 import { UserRole } from './entities/user-role.entity';
-import { USER_ROLE_ADDED } from './listeners/user-role.listener';
+import { USER_ROLE_ADDED } from './events';
 
 describe('RoleGrantsService', () => {
   let service: RoleGrantsService;

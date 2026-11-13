@@ -13,7 +13,14 @@ import { UpdateReviewDto } from './dto/update-review.dto';
 import { PermissionsService } from '../rbac/permissions.service';
 import { VenuesService } from '../venues/venues.service';
 import { FileStorageService } from '../../common/services/file-storage.service';
-import { REVIEW_CREATED, REVIEW_DELETED, REVIEW_UPDATED } from './events';
+import {
+  REVIEW_CREATED,
+  REVIEW_DELETED,
+  REVIEW_UPDATED,
+  type ReviewCreatedEvent,
+  type ReviewDeletedEvent,
+  type ReviewUpdatedEvent,
+} from './events';
 import {
   buildMeta,
   normalizePagination,
@@ -89,7 +96,10 @@ export class ReviewsService {
       });
       // Кеш каталогу після коміту (в транзакції скипати марно)
       await this.venuesService.invalidateCatalogCache();
-      this.events.emit(REVIEW_CREATED, { reviewId: saved.id, venueId });
+      this.events.emit(REVIEW_CREATED, {
+        reviewId: saved.id,
+        venueId,
+      } satisfies ReviewCreatedEvent);
       return saved;
     } catch (e) {
       // Файл чека не має лишатися сиротою, якщо вставка не відбулася.
@@ -125,7 +135,10 @@ export class ReviewsService {
       await this.recalc(review.venueId, em);
     });
     await this.venuesService.invalidateCatalogCache();
-    this.events.emit(REVIEW_UPDATED, { reviewId, venueId: review.venueId });
+    this.events.emit(REVIEW_UPDATED, {
+      reviewId,
+      venueId: review.venueId,
+    } satisfies ReviewUpdatedEvent);
     return review;
   }
 
@@ -146,7 +159,10 @@ export class ReviewsService {
       await this.recalc(venueId, em);
     });
     await this.venuesService.invalidateCatalogCache();
-    this.events.emit(REVIEW_DELETED, { reviewId, venueId });
+    this.events.emit(REVIEW_DELETED, {
+      reviewId,
+      venueId,
+    } satisfies ReviewDeletedEvent);
   }
 
   async findOneOrThrow(id: string): Promise<Review> {

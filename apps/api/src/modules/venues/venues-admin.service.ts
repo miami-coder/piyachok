@@ -13,7 +13,6 @@ import {
 } from './entities/venue.entity';
 import { VenuesService } from './venues.service';
 import { RoleGrantsService } from '../rbac/role-grants.service';
-import { USER_ROLE_ADDED } from '../rbac/listeners/user-role.listener';
 import { RoleCode } from '../rbac/entities/role.enum';
 import { AuditService } from '../admin/audit.service';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
@@ -21,7 +20,8 @@ import {
   buildMeta,
   normalizePagination,
 } from '../../common/utils/pagination.util';
-import { VENUE_STATUS_CHANGED, VenueStatusChangedEvent } from './events';
+import { VENUE_STATUS_CHANGED, type VenueStatusChangedEvent } from './events';
+import { USER_ROLE_ADDED, type UserRoleAddedEvent } from '../rbac/events';
 
 /**
  * Модеративний життєвий цикл закладу: списки модерації, апрув/відхилення,
@@ -86,10 +86,12 @@ export class VenuesAdminService {
       );
     venue.status = to;
     await this.venues.save(venue);
-    this.events.emit(
-      VENUE_STATUS_CHANGED,
-      new VenueStatusChangedEvent(venueId, from, to),
-    );
+    this.events.emit(VENUE_STATUS_CHANGED, {
+      venueId,
+      from,
+      to,
+    } satisfies VenueStatusChangedEvent);
+    await this.venueService.invalidateCatalogCache();
     return venue;
   }
 
@@ -127,13 +129,18 @@ export class VenuesAdminService {
       },
     );
     // Події після коміту: слухачі бачать уже зафіксований стан
-    this.events.emit(
-      VENUE_STATUS_CHANGED,
-      new VenueStatusChangedEvent(venueId, from, VenueStatus.Approved),
-    );
+    this.events.emit(VENUE_STATUS_CHANGED, {
+      venueId,
+      from,
+      to: VenueStatus.Approved,
+    } satisfies VenueStatusChangedEvent);
     if (roleGranted && venue.ownerId)
       // grant із чужим em подію не емітує — робимо це самі після коміту
-      this.events.emit(USER_ROLE_ADDED, { userId: venue.ownerId });
+      this.events.emit(USER_ROLE_ADDED, {
+        userId: venue.ownerId,
+      } satisfies UserRoleAddedEvent);
+    // Кеш каталогу після коміту (сортується за ratingAvg/статусом)
+    await this.venueService.invalidateCatalogCache();
     return venue;
   }
 

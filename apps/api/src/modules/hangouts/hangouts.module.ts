@@ -5,7 +5,6 @@ import { HangoutParticipant } from './entities/hangout-participant.entity';
 import { HangoutsService } from './hangouts.service';
 import { HangoutsController } from './hangouts.controller';
 import { HangoutCron } from './cron/hangout-cron';
-import { HangoutCacheListener } from './listeners/hangout-cache.listener';
 import { VenuesModule } from '../venues/venues.module';
 
 @Module({
@@ -13,7 +12,7 @@ import { VenuesModule } from '../venues/venues.module';
     TypeOrmModule.forFeature([Hangout, HangoutParticipant]),
     VenuesModule,
   ],
-  providers: [HangoutsService, HangoutCron, HangoutCacheListener],
+  providers: [HangoutsService, HangoutCron],
   controllers: [HangoutsController],
   exports: [HangoutsService],
 })

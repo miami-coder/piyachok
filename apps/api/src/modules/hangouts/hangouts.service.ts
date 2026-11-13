@@ -26,9 +26,12 @@ import {
   normalizePagination,
 } from '../../common/utils/pagination.util';
 import { PG_CODES, isPgError } from '../../common/utils/pg-error.util';
-
-export const HANGOUT_FILLED = 'hangout.filled';
-export const HANGOUT_CANCELLED = 'hangout.cancelled';
+import {
+  HANGOUT_CANCELLED,
+  HANGOUT_FILLED,
+  type HangoutCancelledEvent,
+  type HangoutFilledEvent,
+} from './events';
 
 @Injectable()
 export class HangoutsService {
@@ -115,7 +118,10 @@ export class HangoutsService {
         return hangout;
       });
       // Подія після коміту: слухачі бачать уже зафіксований стан
-      if (filled) this.events.emit(HANGOUT_FILLED, { hangoutId });
+      if (filled)
+        this.events.emit(HANGOUT_FILLED, {
+          hangoutId,
+        } satisfies HangoutFilledEvent);
       await this.invalidateListCache();
       return h;
     } catch (e) {
@@ -156,7 +162,10 @@ export class HangoutsService {
       throw new ForbiddenException('Тільки творець може видалити запит');
     }
     await this.hangouts.delete(hangoutId);
-    this.events.emit(HANGOUT_CANCELLED, { hangoutId, deleted: true });
+    this.events.emit(HANGOUT_CANCELLED, {
+      hangoutId,
+      deleted: true,
+    } satisfies HangoutCancelledEvent);
     await this.invalidateListCache();
   }
 
@@ -176,7 +185,9 @@ export class HangoutsService {
     }
     h.status = HangoutStatus.Cancelled;
     await this.hangouts.save(h);
-    this.events.emit(HANGOUT_CANCELLED, { hangoutId });
+    this.events.emit(HANGOUT_CANCELLED, {
+      hangoutId,
+    } satisfies HangoutCancelledEvent);
     await this.invalidateListCache();
     return h;
   }

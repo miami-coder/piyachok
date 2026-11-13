@@ -1,9 +1,6 @@
 import { Test } from '@nestjs/testing';
-import {
-  UserRoleListener,
-  USER_ROLE_ADDED,
-  USER_ROLE_REMOVED,
-} from './user-role.listener';
+import { USER_ROLE_ADDED, USER_ROLE_REMOVED } from '../events';
+import { UserRoleListener } from './user-role.listener';
 import { PermissionsService } from '../permissions.service';
 
 describe('UserRoleListener', () => {

@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PermissionsService } from '../permissions.service';
-
-export const USER_ROLE_ADDED = 'user_role.added';
-export const USER_ROLE_REMOVED = 'user_role.removed';
+import {
+  USER_ROLE_ADDED,
+  USER_ROLE_REMOVED,
+  type UserRoleAddedEvent,
+  type UserRoleRemovedEvent,
+} from '../events';
 
 @Injectable()
 export class UserRoleListener {
@@ -12,7 +15,7 @@ export class UserRoleListener {
   constructor(private readonly perms: PermissionsService) {}
 
   @OnEvent(USER_ROLE_ADDED)
-  async handleAdded(payload: { userId: string }) {
+  async handleAdded(payload: UserRoleAddedEvent) {
     this.logger.log(
       `Invalidating permissions cache for user ${payload.userId} (role added)`,
     );
@@ -20,7 +23,7 @@ export class UserRoleListener {
   }
 
   @OnEvent(USER_ROLE_REMOVED)
-  async handleRemoved(payload: { userId: string }) {
+  async handleRemoved(payload: UserRoleRemovedEvent) {
     this.logger.log(
       `Invalidating permissions cache for user ${payload.userId} (role removed)`,
     );

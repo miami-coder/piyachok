@@ -24,9 +24,9 @@ import {
   VENUE_CREATED,
   VENUE_STATUS_CHANGED,
   VENUE_UPDATED,
-  VenueCreatedEvent,
-  VenueStatusChangedEvent,
-  VenueUpdatedEvent,
+  type VenueCreatedEvent,
+  type VenueStatusChangedEvent,
+  type VenueUpdatedEvent,
 } from './events';
 
 /** Показові поля закладу для карток у чужих списках (наприклад, вподобання). */
@@ -82,7 +82,9 @@ export class VenuesService {
       return created;
     });
     // Подія після коміту: слухачі бачать уже зафіксований стан
-    this.events.emit(VENUE_CREATED, new VenueCreatedEvent(saved.id));
+    this.events.emit(VENUE_CREATED, {
+      venueId: saved.id,
+    } satisfies VenueCreatedEvent);
     return saved;
   }
 
@@ -137,7 +139,9 @@ export class VenuesService {
       return em.save(venue);
     });
     // Подія після коміту
-    this.events.emit(VENUE_UPDATED, new VenueUpdatedEvent(saved.id));
+    this.events.emit(VENUE_UPDATED, {
+      venueId: saved.id,
+    } satisfies VenueUpdatedEvent);
     return saved;
   }
 
@@ -166,10 +170,11 @@ export class VenuesService {
       throw new ConflictException('Заклад уже видалений');
     venue.status = VenueStatus.Archived;
     await this.venues.save(venue);
-    this.events.emit(
-      VENUE_STATUS_CHANGED,
-      new VenueStatusChangedEvent(venue.id, from, VenueStatus.Archived),
-    );
+    this.events.emit(VENUE_STATUS_CHANGED, {
+      venueId: venue.id,
+      from,
+      to: VenueStatus.Archived,
+    } satisfies VenueStatusChangedEvent);
   }
 
   async findOneOrThrow(id: string): Promise<Venue> {
