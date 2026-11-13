@@ -5,26 +5,24 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, In, Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Venue, VenueStatus } from './entities/venue.entity';
 import { VenuePhoto } from './entities/venue-photo.entity';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
-import { QueryVenuesDto, VenueSort } from './dto/query-venues.dto';
 import { VenueTaxonomyService } from './venues-taxonomy.service';
+import { VenuesCatalogService } from './venues-catalog.service';
 import { PermissionsService } from '../rbac/permissions.service';
 import { RoleGrantsService } from '../rbac/role-grants.service';
 import { RoleCode } from '../rbac/entities/role.enum';
 import { AuditService } from '../admin/audit.service';
-import { CacheService } from '../../common/services/cache.service';
 import { FileStorageService } from '../../common/services/file-storage.service';
 import {
   buildMeta,
   normalizePagination,
 } from '../../common/utils/pagination.util';
-import { createHash } from 'crypto';
 import {
   VENUE_CREATED,
   VENUE_STATUS_CHANGED,
@@ -40,19 +38,6 @@ export type VenueCard = Pick<
   'id' | 'name' | 'address' | 'ratingAvg' | 'mainPhotoUrl'
 >;
 
-/** CSV «wifi, parking» → [ 'wifi', 'parking' ] (пробіли по краях зріжувати). */
-function csvCodes(csv: string): string[] {
-  return csv
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/** Екранування % та _ для ILIKE: вони не wildcard, а літерали. */
-function escapeLike(input: string): string {
-  return input.replace(/[!%_\\]/g, (ch) => `!${ch}`);
-}
-
 @Injectable()
 export class VenuesService {
   constructor(
@@ -60,10 +45,10 @@ export class VenuesService {
     @InjectRepository(VenuePhoto)
     private readonly photos: Repository<VenuePhoto>,
     private readonly taxonomy: VenueTaxonomyService,
+    private readonly catalog: VenuesCatalogService,
     private readonly perms: PermissionsService,
     private readonly roleGrants: RoleGrantsService,
     private readonly audit: AuditService,
-    private readonly cache: CacheService,
     private readonly events: EventEmitter2,
     private readonly storage: FileStorageService,
   ) {}
@@ -274,7 +259,7 @@ export class VenuesService {
     venue.recommendedBy = userId;
     venue.recommendedAt = new Date();
     const saved = await this.venues.save(venue);
-    await this.invalidateListCache();
+    await this.catalog.invalidateListCache();
     return saved;
   }
 
@@ -290,7 +275,7 @@ export class VenuesService {
     venue.recommendedBy = null;
     venue.recommendedAt = null;
     const saved = await this.venues.save(venue);
-    await this.invalidateListCache();
+    await this.catalog.invalidateListCache();
     return saved;
   }
 
@@ -310,121 +295,6 @@ export class VenuesService {
       .leftJoinAndSelect('vta.type', 'ty')
       .where('v.id = :id', { id })
       .getOne();
-  }
-
-  async search(query: QueryVenuesDto) {
-    const { page, limit, offset } = normalizePagination(query);
-    const cacheKey = `venues:list:${this.hashQuery(query)}`;
-    const cached = await this.cache.get<{ data: Venue[]; total: number }>(
-      cacheKey,
-    );
-    if (cached) {
-      // cached.data — це вже сторінка (ключ включає page); повторне
-      // зріжування робило повторні сторінки порожніми.
-      return {
-        data: cached.data,
-        meta: buildMeta({ page, limit, offset }, cached.total),
-      };
-    }
-
-    const qb = this.venues
-      .createQueryBuilder('v')
-      .leftJoinAndSelect('v.photos', 'photo')
-      .leftJoinAndSelect('v.featureAssignments', 'fa')
-      .leftJoinAndSelect('fa.feature', 'f')
-      .leftJoinAndSelect('v.venueTags', 'vt')
-      .leftJoinAndSelect('vt.tag', 't')
-      .leftJoinAndSelect('v.venueTypeAssignments', 'vta')
-      .leftJoinAndSelect('vta.type', 'ty')
-      .where('v.status = :status', { status: VenueStatus.Approved });
-
-    if (query.q) {
-      // % и _ — літерали, не wildcard
-      const safe = `%${escapeLike(query.q)}%`;
-      qb.andWhere(
-        new Brackets((b) =>
-          b
-            .where(`v.name ILIKE :q ESCAPE '!'`, { q: safe })
-            .orWhere(`v.address ILIKE :q ESCAPE '!'`, { q: safe }),
-        ),
-      );
-    }
-    if (query.minRating != null)
-      qb.andWhere('v.ratingAvg >= :minRating', { minRating: query.minRating });
-    if (query.minCheck != null)
-      qb.andWhere('v.averageCheck >= :minCheck', { minCheck: query.minCheck });
-    if (query.maxCheck != null)
-      qb.andWhere('v.averageCheck <= :maxCheck', { maxCheck: query.maxCheck });
-    if (query.feature) {
-      // AND-семантика: заклад має ВСІ запитані фічі —
-      // окремий EXISTS-підзапит на кожен код, а не один IN (OR).
-      for (const [i, code] of csvCodes(query.feature).entries()) {
-        const key = `feature_${i}`;
-        qb.andWhere(
-          `EXISTS (SELECT 1 FROM venue_feature_assignments fa2 JOIN venue_features f2 ON f2.id = fa2."featureId" WHERE fa2."venueId" = v.id AND f2.code = :${key})`,
-          { [key]: code },
-        );
-      }
-    }
-    if (query.tag) {
-      // AND-семантика для тегів — так само
-      for (const [i, slug] of csvCodes(query.tag).entries()) {
-        const key = `tag_${i}`;
-        qb.andWhere(
-          `EXISTS (SELECT 1 FROM venue_tags vt2 JOIN tags t2 ON t2.id = vt2."tagId" WHERE vt2."venueId" = v.id AND t2.slug = :${key})`,
-          { [key]: slug },
-        );
-      }
-    }
-    if (query.type) qb.andWhere('ty.slug = :type', { type: query.type });
-    if (query.recommended)
-      // «Рекомендовані критиком» (секція на /top): критик-прапор на закладі.
-      qb.andWhere('v.recommendedBy IS NOT NULL');
-    if (query.lat != null && query.lng != null && query.radiusKm != null) {
-      qb.andWhere(
-        `ST_DWithin(v.location, ST_MakePoint(:lng, :lat)::geography, :meters)`,
-        { lng: query.lng, lat: query.lat, meters: query.radiusKm * 1000 },
-      );
-    }
-
-    const sort: VenueSort = query.sort ?? 'newest';
-    switch (sort) {
-      case 'rating':
-        qb.orderBy('v.ratingAvg', 'DESC', 'NULLS LAST').addOrderBy(
-          'v.ratingCount',
-          'DESC',
-        );
-        break;
-      case 'check':
-        qb.orderBy('v.averageCheck', 'ASC', 'NULLS LAST');
-        break;
-      case 'name':
-        qb.orderBy('v.name', 'ASC');
-        break;
-      case 'distance':
-        if (query.lat != null && query.lng != null) {
-          // Параметри у raw-виразі addSelect підставляються лише якщо вони
-          // зареєстровані в іменованих параметрах запиту. Без radiusKm вони
-          // ніде не появлялись — у SQL лишалось сире ST_MakePoint(:lng, :lat)
-          // і Postgres віддавав «syntax error at or near ":"» (500).
-          qb.setParameters({ lng: query.lng, lat: query.lat });
-          qb.addSelect(
-            `ST_Distance(v.location, ST_MakePoint(:lng, :lat)::geography)`,
-            'distance',
-          ).orderBy('distance', 'ASC');
-        } else {
-          qb.orderBy('v.createdAt', 'DESC');
-        }
-        break;
-      case 'newest':
-      default:
-        qb.orderBy('v.createdAt', 'DESC');
-    }
-    qb.skip(offset).take(limit);
-
-    const [rows, total] = await qb.getManyAndCount();
-    await this.cache.set(cacheKey, { data: rows, total }, 60);
-    return { data: rows, meta: buildMeta({ page, limit, offset }, total) };
   }
 
   async findPending(page = 1, limit = 20) {
@@ -503,7 +373,7 @@ export class VenuesService {
     stats: { ratingAvg: number; ratingCount: number },
   ): Promise<void> {
     await this.venues.update(venueId, stats);
-    await this.invalidateListCache();
+    await this.catalog.invalidateListCache();
   }
 
   /** Лічильник переглядів кеш списку навмисно не скидає: viewCount не
@@ -534,10 +404,6 @@ export class VenuesService {
       if (v) cards.push(v);
     }
     return cards;
-  }
-
-  async invalidateListCache() {
-    await this.cache.delByPattern('venues:list:*');
   }
 
   private async assertCanEdit(userId: string, venue: Venue) {
@@ -572,9 +438,5 @@ export class VenuesService {
       await this.venues.save(venue);
     }
     return stored;
-  }
-
-  private hashQuery(q: QueryVenuesDto): string {
-    return createHash('sha1').update(JSON.stringify(q)).digest('hex');
   }
 }

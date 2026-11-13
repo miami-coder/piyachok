@@ -34,6 +34,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { VenuesService } from './venues.service';
 import { VenueTaxonomyService } from './venues-taxonomy.service';
+import { VenuesCatalogService } from './venues-catalog.service';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
 import { QueryVenuesDto } from './dto/query-venues.dto';
@@ -48,6 +49,7 @@ import {
 export class VenuesController {
   constructor(
     private readonly venues: VenuesService,
+    private readonly catalog: VenuesCatalogService,
     private readonly taxonomy: VenueTaxonomyService,
   ) {}
 
@@ -59,7 +61,7 @@ export class VenuesController {
     description: 'Сторінкований список закладів',
   })
   list(@Query() q: QueryVenuesDto) {
-    return this.venues.search(q);
+    return this.catalog.search(q);
   }
 
   @Public()

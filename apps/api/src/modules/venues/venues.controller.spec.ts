@@ -3,22 +3,26 @@ import { PermissionsService } from '../rbac/permissions.service';
 import { VenuesController } from './venues.controller';
 import { VenuesService } from './venues.service';
 import { VenueTaxonomyService } from './venues-taxonomy.service';
+import { VenuesCatalogService } from './venues-catalog.service';
 import { FileStorageService } from '../../common/services/file-storage.service';
 
 describe('VenuesController', () => {
   let controller: VenuesController;
   let venues: any;
+  let catalog: any;
   let storage: any;
 
   beforeEach(async () => {
     venues = {
-      search: jest.fn(),
       findOnePublic: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
       findOneOrThrow: jest.fn(),
       uploadPhoto: jest.fn(),
       softDelete: jest.fn(),
+    };
+    catalog = {
+      search: jest.fn(),
     };
     storage = { save: jest.fn() };
     const module = await Test.createTestingModule({
@@ -29,6 +33,10 @@ describe('VenuesController', () => {
           useValue: { hasAnyPermission: jest.fn().mockResolvedValue(true) },
         },
         { provide: VenuesService, useValue: venues },
+        {
+          provide: VenuesCatalogService,
+          useValue: catalog,
+        },
         {
           provide: VenueTaxonomyService,
           useValue: {
@@ -43,8 +51,8 @@ describe('VenuesController', () => {
     controller = module.get(VenuesController);
   });
 
-  it('list delegates to service', async () => {
-    venues.search.mockResolvedValue({ data: [], meta: { total: 0 } });
+  it('list delegates to catalog service', async () => {
+    catalog.search.mockResolvedValue({ data: [], meta: { total: 0 } });
     const res = await controller.list({ page: 1, limit: 20 });
     expect(res.meta.total).toBe(0);
   });

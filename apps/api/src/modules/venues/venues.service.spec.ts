@@ -8,6 +8,7 @@ import {
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { VenuesService } from './venues.service';
 import { VenueTaxonomyService } from './venues-taxonomy.service';
+import { VenuesCatalogService } from './venues-catalog.service';
 import { Venue, VenueStatus } from './entities/venue.entity';
 import { VenuePhoto } from './entities/venue-photo.entity';
 import { VenueFeature } from './entities/venue-feature.entity';
@@ -18,7 +19,6 @@ import { VenueType } from './entities/venue-type.entity';
 import { VenueTypeAssignment } from './entities/venue-type-assignment.entity';
 import { PermissionsService } from '../rbac/permissions.service';
 import { RoleGrantsService } from '../rbac/role-grants.service';
-import { CacheService } from '../../common/services/cache.service';
 import { FileStorageService } from '../../common/services/file-storage.service';
 import { AuditService } from '../admin/audit.service';
 import type { SanitizedUser } from '../../common/utils/sanitize-user';
@@ -56,7 +56,7 @@ describe('VenuesService', () => {
   let venues: any;
   let photos: any;
   let perms: any;
-  let cache: any;
+  let catalog: any;
   let events: any;
   let storage: any;
   let roleGrants: any;
@@ -86,11 +86,7 @@ describe('VenuesService', () => {
     perms = { hasPermission: jest.fn(), invalidate: jest.fn() };
     roleGrants = { grant: jest.fn() };
     audit = { log: jest.fn() };
-    cache = {
-      get: jest.fn().mockResolvedValue(null),
-      set: jest.fn(),
-      delByPattern: jest.fn(),
-    };
+    catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn() };
     const module = await Test.createTestingModule({
@@ -124,7 +120,7 @@ describe('VenuesService', () => {
           useValue: venueTypeAssignmentsRepo,
         },
         { provide: PermissionsService, useValue: perms },
-        { provide: CacheService, useValue: cache },
+        { provide: VenuesCatalogService, useValue: catalog },
         { provide: EventEmitter2, useValue: events },
         { provide: FileStorageService, useValue: storage },
         { provide: RoleGrantsService, useValue: roleGrants },
@@ -498,75 +494,6 @@ describe('VenuesService', () => {
     );
   });
 
-  it('search returns from cache when present', async () => {
-    cache.get.mockResolvedValueOnce({
-      data: [{ id: 'v1', name: 'X' }],
-      total: 1,
-    });
-    const res = await service.search({ page: 1, limit: 20 });
-    expect(res.data).toHaveLength(1);
-    expect(res.meta.total).toBe(1);
-  });
-
-  it('search queries DB on cache miss', async () => {
-    const res = await service.search({ page: 1, limit: 20 });
-    expect(venues.createQueryBuilder).toHaveBeenCalled();
-    expect(cache.set).toHaveBeenCalled();
-    expect(res.data).toEqual([]);
-  });
-
-  it('search: recommended=1 — only рекомендовані критиком (/,top), фільтр іде в where', async () => {
-    const mockQb = venues.createQueryBuilder();
-    await service.search({ page: 1, limit: 12, recommended: '1' });
-    const sqls = mockQb.andWhere.mock.calls.map(
-      (c: unknown[]) => c[0] as string,
-    );
-    expect(sqls).toContain('v.recommendedBy IS NOT NULL');
-  });
-
-  it('search без recommended — клаузи рекомендацій у where НЕ додаються (каталог не лізе у вибір критика)', async () => {
-    const mockQb = venues.createQueryBuilder();
-    await service.search({ page: 1, limit: 12 });
-    const sqls = mockQb.andWhere.mock.calls.map(
-      (c: unknown[]) => c[0] as string,
-    );
-    expect(sqls.some((s: string) => s.includes('recommendedBy'))).toBe(false);
-  });
-
-  it('search: фічі/теги — AND-семантика (заклад має ВСІ запитані), CSV не втрачає значення', async () => {
-    const mockQb = venues.createQueryBuilder(); // той самий обʼєкт, що піде у search
-    await service.search({
-      page: 1,
-      limit: 20,
-      tag: ' cocktails, dj ',
-      feature: 'wifi, parking',
-    });
-    const sqls = mockQb.andWhere.mock.calls.map(
-      (c: unknown[]) => c[0] as string,
-    );
-    // Для КОЖНОГО запитаного коду свій EXISTS-підзапит (AND), а не один IN (OR)
-    expect(
-      sqls.some(
-        (s: string) => s.includes('EXISTS') && s.includes('f2.code = :'),
-      ),
-    ).toBe(true);
-    const andParams = mockQb.andWhere.mock.calls
-      .flat()
-      .filter((x: unknown) => typeof x === 'object' && x !== null) as Record<
-      string,
-      string
-    >[];
-    const flat = andParams.map((o) => Object.entries(o)).flat();
-    for (const code of ['wifi', 'parking']) {
-      expect(flat.some(([k, v]) => k.includes('feature') && v === code)).toBe(
-        true,
-      );
-    }
-    for (const slug of ['cocktails', 'dj']) {
-      expect(flat.some(([k, v]) => k.includes('tag') && v === slug)).toBe(true);
-    }
-  });
-
   it('changeStatus emits status_changed event', async () => {
     venues.findOne.mockResolvedValueOnce({
       id: 'v1',
@@ -656,7 +583,7 @@ describe('VenuesService', () => {
 
     beforeEach(() => {
       venues.save.mockImplementation(async (v: any) => v);
-      cache.delByPattern.mockResolvedValue(undefined);
+      catalog.invalidateListCache.mockResolvedValue(undefined);
     });
 
     it('recommend ставить recommendedBy/recommendedAt і скидає кеш списку', async () => {
@@ -665,7 +592,7 @@ describe('VenuesService', () => {
       const saved = await service.recommend('u-critic', 'v1');
       expect(saved.recommendedBy).toBe('u-critic');
       expect(saved.recommendedAt).toBeInstanceOf(Date);
-      expect(cache.delByPattern).toHaveBeenCalled();
+      expect(catalog.invalidateListCache).toHaveBeenCalled();
     });
 
     it('recommend кидає 403 без дозволу venue:recommend', async () => {
@@ -710,7 +637,7 @@ describe('VenuesService', () => {
       const saved = await service.unrecommend('u-critic', 'v1');
       expect(saved.recommendedBy).toBeNull();
       expect(saved.recommendedAt).toBeNull();
-      expect(cache.delByPattern).toHaveBeenCalled();
+      expect(catalog.invalidateListCache).toHaveBeenCalled();
     });
 
     it('unrecommend кидає 403 за чужу рекомендацію', async () => {
@@ -754,7 +681,7 @@ describe('VenuesService.findOnePublic — санітизація власник�
   let service: VenuesService;
   let venues: any;
   let perms: any;
-  let cache: any;
+  let catalog: any;
   let events: any;
   let storage: any;
   let photos: any;
@@ -764,7 +691,7 @@ describe('VenuesService.findOnePublic — санітизація власник�
   beforeEach(async () => {
     photos = {};
     perms = { hasPermission: jest.fn().mockResolvedValue(true) };
-    cache = { get: jest.fn().mockResolvedValue(undefined), set: jest.fn() };
+    catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };
     roleGrants = { grant: jest.fn() };
@@ -798,7 +725,7 @@ describe('VenuesService.findOnePublic — санітизація власник�
         },
         { provide: VenueTaxonomyService, useValue: taxonomyMock() },
         { provide: PermissionsService, useValue: perms },
-        { provide: CacheService, useValue: cache },
+        { provide: VenuesCatalogService, useValue: catalog },
         { provide: FileStorageService, useValue: storage },
         { provide: RoleGrantsService, useValue: roleGrants },
         { provide: AuditService, useValue: audit },
@@ -865,87 +792,10 @@ describe('VenuesService.findOnePublic — санітизація власник�
   });
 });
 
-describe('VenuesService.search — кеш-хіт повторної сторінки', () => {
-  let service: VenuesService;
-  let venues: any;
-  let cache: any;
-  let perms: any;
-  let events: any;
-  let storage: any;
-  let audit: any;
-  let roleGrants: any;
-
-  beforeEach(async () => {
-    perms = { hasPermission: jest.fn().mockResolvedValue(false) };
-    cache = { get: jest.fn().mockResolvedValue(undefined), set: jest.fn() };
-    events = { emit: jest.fn() };
-    storage = { save: jest.fn(), remove: jest.fn() };
-    audit = {};
-    roleGrants = { grant: jest.fn() };
-    venues = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-      create: jest.fn(),
-      findAndCount: jest.fn().mockResolvedValue([[], 0]),
-      createQueryBuilder: jest.fn().mockReturnValue(qb()),
-    };
-    const module = await Test.createTestingModule({
-      providers: [
-        VenuesService,
-        { provide: getRepositoryToken(Venue), useValue: venues },
-        { provide: getRepositoryToken(VenuePhoto), useValue: {} },
-        { provide: getRepositoryToken(VenueFeature), useValue: {} },
-        {
-          provide: getRepositoryToken(VenueFeatureAssignment),
-          useValue: { save: jest.fn(), delete: jest.fn() },
-        },
-        { provide: getRepositoryToken(Tag), useValue: { find: jest.fn() } },
-        {
-          provide: getRepositoryToken(VenueTag),
-          useValue: { save: jest.fn(), delete: jest.fn() },
-        },
-        { provide: getRepositoryToken(VenueType), useValue: {} },
-        {
-          provide: getRepositoryToken(VenueTypeAssignment),
-          useValue: { save: jest.fn(), delete: jest.fn() },
-        },
-        { provide: VenueTaxonomyService, useValue: taxonomyMock() },
-        { provide: PermissionsService, useValue: perms },
-        { provide: CacheService, useValue: cache },
-        { provide: FileStorageService, useValue: storage },
-        { provide: RoleGrantsService, useValue: roleGrants },
-        { provide: AuditService, useValue: audit },
-        { provide: EventEmitter2, useValue: events },
-      ],
-    }).compile();
-    service = module.get(VenuesService);
-  });
-
-  it('повторний запит сторінки 2 при 16 закладах НЕ порожній (без пере-зріжування)', async () => {
-    // перший запит сторінки 2: БД повертає єдиний 16-й рядок
-    const pageTwoQb = {
-      ...qb(),
-      getManyAndCount: jest.fn().mockResolvedValue([[{ id: 'v16' }], 16]),
-    };
-    venues.createQueryBuilder.mockReturnValueOnce(pageTwoQb);
-    const first = await service.search({ page: 2, limit: 15 });
-    expect(first.data).toHaveLength(1);
-    expect(first.meta.total).toBe(16);
-    // кеш збережений
-    expect(cache.set).toHaveBeenCalled();
-    // повторний запит: кеш-хіт із тим самим сторінковим data
-    cache.get.mockResolvedValueOnce({ data: [{ id: 'v16' }], total: 16 });
-    const second = await service.search({ page: 2, limit: 15 });
-    expect(second.data).toHaveLength(1);
-    expect(second.meta.total).toBe(16);
-    expect(second.data[0].id).toBe('v16');
-  });
-});
-
 describe('VenuesService — модерація закладів', () => {
   let service: VenuesService;
   let venues: any;
-  let cache: any;
+  let catalog: any;
   let perms: any;
   let events: any;
   let storage: any;
@@ -954,7 +804,7 @@ describe('VenuesService — модерація закладів', () => {
 
   beforeEach(async () => {
     perms = { hasPermission: jest.fn().mockResolvedValue(false) };
-    cache = { get: jest.fn().mockResolvedValue(undefined), set: jest.fn() };
+    catalog = { invalidateListCache: jest.fn().mockResolvedValue(undefined) };
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };
     audit = { log: jest.fn().mockResolvedValue(undefined) };
@@ -988,7 +838,7 @@ describe('VenuesService — модерація закладів', () => {
         },
         { provide: VenueTaxonomyService, useValue: taxonomyMock() },
         { provide: PermissionsService, useValue: perms },
-        { provide: CacheService, useValue: cache },
+        { provide: VenuesCatalogService, useValue: catalog },
         { provide: FileStorageService, useValue: storage },
         { provide: RoleGrantsService, useValue: roleGrants },
         { provide: AuditService, useValue: audit },
@@ -1023,75 +873,3 @@ describe('VenuesService — модерація закладів', () => {
     expect(v.status).toBe('pending');
   });
 });
-
-describe('VenuesService.search — %/_ літерали, не wildcard', () => {
-  it('q з % та _ залишається літералом у ILIKE', async () => {
-    const venues = {
-      findOne: jest.fn(),
-      save: jest.fn(),
-      create: jest.fn(),
-      findAndCount: jest.fn().mockResolvedValue([[], 0]),
-      createQueryBuilder: jest.fn().mockReturnValue(qb()),
-    };
-    const module = await Test.createTestingModule({
-      providers: [
-        VenuesService,
-        { provide: getRepositoryToken(Venue), useValue: venues },
-        { provide: getRepositoryToken(VenuePhoto), useValue: {} },
-        { provide: getRepositoryToken(VenueFeature), useValue: {} },
-        {
-          provide: getRepositoryToken(VenueFeatureAssignment),
-          useValue: { save: jest.fn(), delete: jest.fn() },
-        },
-        { provide: getRepositoryToken(Tag), useValue: { find: jest.fn() } },
-        {
-          provide: getRepositoryToken(VenueTag),
-          useValue: { save: jest.fn(), delete: jest.fn() },
-        },
-        { provide: getRepositoryToken(VenueType), useValue: {} },
-        {
-          provide: getRepositoryToken(VenueTypeAssignment),
-          useValue: { save: jest.fn(), delete: jest.fn() },
-        },
-        { provide: VenueTaxonomyService, useValue: taxonomyMock() },
-        { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
-        { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
-        { provide: FileStorageService, useValue: { save: jest.fn() } },
-        {
-          provide: RoleGrantsService,
-          useValue: { grant: jest.fn().mockResolvedValue(false) },
-        },
-        { provide: AuditService, useValue: {} },
-        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
-      ],
-    }).compile();
-    const service = module.get(VenuesService);
-    await service.search({ page: 1, limit: 20, q: '10%_off' });
-    const calls = venues.createQueryBuilder().andWhere.mock.calls;
-    // ILIKE живе в Brackets — розгортаємо фабрику проти фейкового будівника
-    const bracketArg = calls
-      .map((c: unknown[]) => c[0])
-      .find((a: any) => a && typeof a.whereFactory === 'function');
-    expect(bracketArg).toBeTruthy();
-    const rec: { sql: string[]; params: Record<string, unknown>[] } = {
-      sql: [],
-      params: [],
-    };
-    const recorder = {
-      where(sql: string, params?: Record<string, unknown>) {
-        rec.sql.push(sql);
-        if (params) rec.params.push(params);
-        return recorder;
-      },
-      orWhere(sql: string, params?: Record<string, unknown>) {
-        rec.sql.push(sql);
-        if (params) rec.params.push(params);
-        return recorder;
-      },
-    };
-    bracketArg.whereFactory(recorder);
-    expect(rec.sql[0]).toContain("ESCAPE '!'");
-    expect(rec.params[0].q).toBe('%10!%!_off%');
-  });
-});
-
