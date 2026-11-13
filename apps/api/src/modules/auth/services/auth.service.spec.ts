@@ -55,6 +55,8 @@ describe('AuthService', () => {
     cache = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
+      del: jest.fn().mockResolvedValue(undefined),
+      setIfNotExists: jest.fn().mockResolvedValue(true),
     };
     const module = await Test.createTestingModule({
       imports: [JwtModule.register({})],
@@ -147,19 +149,45 @@ describe('AuthService', () => {
     expect(tokens.signAccess).not.toHaveBeenCalled();
   });
 
+  // Ротація за атомарним claim: скасований токен — це програний SET NX за
+  // відсутності grace-пари (не get-перевірка, як раніше)
   it('refresh throws when token revoked', async () => {
-    cache.get.mockResolvedValueOnce(true);
+    cache.setIfNotExists.mockResolvedValueOnce(false);
     await expect(service.refresh('old')).rejects.toThrow(UnauthorizedException);
   });
 
   it('refresh rotates token on success', async () => {
     const res = await service.refresh('old');
     expect(res.accessToken).toBe('access-tok');
-    expect(cache.set).toHaveBeenCalledWith(
+    expect(res.refreshToken).toBe('refresh-tok');
+    expect(cache.setIfNotExists).toHaveBeenCalledWith(
       'revoked:old',
       true,
       expect.any(Number),
     );
+    expect(cache.set).toHaveBeenCalledWith(
+      'rotated:old',
+      expect.objectContaining({ accessToken: 'access-tok' }),
+      60,
+    );
+  });
+
+  it('refresh повертає grace-пару переможця, коли claim програно', async () => {
+    cache.setIfNotExists.mockResolvedValueOnce(false);
+    const winnersPair = {
+      accessToken: 'winner-access',
+      refreshToken: 'winner-refresh',
+      user: { id: 'u1', email: 'a@b.com', roles: ['user'] },
+    };
+    cache.get.mockResolvedValueOnce(winnersPair);
+    const res = await service.refresh('old');
+    expect(res).toEqual(winnersPair);
+    expect(tokens.signAccess).not.toHaveBeenCalled();
+  });
+
+  it('refresh после програного claim без grace-пари → 401 (reuse поза вікном)', async () => {
+    cache.setIfNotExists.mockResolvedValueOnce(false);
+    await expect(service.refresh('old')).rejects.toThrow(UnauthorizedException);
   });
 
   it('logout marks token revoked', async () => {
@@ -169,6 +197,11 @@ describe('AuthService', () => {
       true,
       expect.any(Number),
     );
+  });
+
+  it('logout знищує grace-пару токена', async () => {
+    await service.logout('r1');
+    expect(cache.del).toHaveBeenCalledWith('rotated:r1');
   });
 });
 
@@ -197,6 +230,8 @@ describe('AuthService — видалення юзера фінальне', () =>
     cache = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue(undefined),
+      del: jest.fn().mockResolvedValue(undefined),
+      setIfNotExists: jest.fn().mockResolvedValue(true),
     };
     events = { emit: jest.fn() };
     const module = await Test.createTestingModule({

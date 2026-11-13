@@ -65,20 +65,50 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException('Невірний refresh token');
     }
-    if (await this.cache.get(`revoked:${refreshToken}`)) {
-      throw new UnauthorizedException('Refresh token скасований');
-    }
     const user = await this.users.findById(payload.sub);
     if (user?.deletedAt)
       throw new UnauthorizedException('Обліковий запис видалено');
     const roles = await this.getUserRoles(user.id);
-    // Rotate
-    await this.cache.set(`revoked:${refreshToken}`, true, 60 * 60 * 24 * 30);
-    return this.issueTokens(user.id, user.email, roles);
+
+    // Ротація за атомарним claim: кілька паралельних запитів з одним
+    // простроченим access-токеном одночасно пред'являють той самий
+    // refresh-токен, а SET NX віддає перемогу рівно одному з них. Переможець
+    // ротує пару; решта читають ЇЇ ЖЕ з grace-ключа замість 401 (одноразовий
+    // токен, і перевірка get-then-set не атомарна — без claim паралельні
+    // запити або пролітали двічі, або отримували 401 і викидались на логін).
+    if (
+      await this.cache.setIfNotExists(
+        `revoked:${refreshToken}`,
+        true,
+        60 * 60 * 24 * 30,
+      )
+    ) {
+      const issued = this.issueTokens(user.id, user.email, roles);
+      // Grace-вікно 60с: паралельні refresh того самого старого токена
+      // отримують ідентичну пару. Короткий TTL — reuse поза паралельністю
+      // (реальний reuse-кандидат) швидко знову стає 401.
+      await this.cache.set(`rotated:${refreshToken}`, issued, 60);
+      return issued;
+    }
+
+    // Програний claim — переможець ротує пару, віддаємо її саму. Ретраї
+    // покривають мікро-вікно між claim переможця і записом grace-ключа
+    // (у ньму вже виконуються SELECT юзера і підпис токенів).
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const rotated = await this.cache.get<
+        ReturnType<AuthService['issueTokens']>
+      >(`rotated:${refreshToken}`);
+      if (rotated) return rotated;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new UnauthorizedException('Refresh token скасований');
   }
 
   async logout(refreshToken: string) {
     await this.cache.set(`revoked:${refreshToken}`, true, 60 * 60 * 24 * 30);
+    // Grace-пару цього токена теж знищуємо: після логауту reuse протягом вікна
+    // не має повернути живу пару
+    await this.cache.del(`rotated:${refreshToken}`);
   }
 
   async getRolesForUser(userId: string): Promise<string[]> {

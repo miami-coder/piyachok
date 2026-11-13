@@ -38,4 +38,14 @@ describe('CacheService', () => {
     await expect(service.delByPattern('pattern:*')).resolves.toBeUndefined();
     await service.onModuleDestroy();
   });
+
+  // no-op fallback: без редісу claim завжди «успішний», щоб ротація
+  // refresh-токенів деградувала до колишньої поведінки, а не лочилась
+  it('setIfNotExists returns true when redis is not connected', async () => {
+    await service.onModuleInit();
+    await expect(service.setIfNotExists('key', { a: 1 }, 60)).resolves.toBe(
+      true,
+    );
+    await service.onModuleDestroy();
+  });
 });

@@ -76,6 +76,33 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  // Атомарний SET NX: записує ключ, тільки якщо його ще не існує. Єдиний
+  // спосіб розділити паралельні претенденти: переможець визначається самим
+  // редісом, без гонки між get і set (класичний check-then-set двох запитів
+  // проходить обидва). Відсутність редісу / мережева помилка → true, щоб
+  // функціональність деградувала до поведінки no-op кешу, а не лочилась.
+  async setIfNotExists(
+    key: string,
+    value: unknown,
+    ttlSeconds?: number,
+  ): Promise<boolean> {
+    if (!this.client) return true;
+    try {
+      const res = ttlSeconds
+        ? await this.client.set(
+            key,
+            JSON.stringify(value),
+            'EX',
+            ttlSeconds,
+            'NX',
+          )
+        : await this.client.set(key, JSON.stringify(value), 'NX');
+      return res === 'OK';
+    } catch {
+      return true;
+    }
+  }
+
   async del(key: string): Promise<void> {
     if (!this.client) return;
     try {
