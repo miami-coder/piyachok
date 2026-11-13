@@ -5,6 +5,7 @@ import {
   ConflictException,
   BadRequestException,
   InternalServerErrorException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AuthService } from './auth.service';
@@ -61,6 +62,7 @@ describe('AuthService', () => {
       set: jest.fn().mockResolvedValue(undefined),
       del: jest.fn().mockResolvedValue(undefined),
       setIfNotExists: jest.fn().mockResolvedValue(true),
+      isConnected: jest.fn().mockReturnValue(true),
     };
     const module = await Test.createTestingModule({
       imports: [JwtModule.register({})],
@@ -214,6 +216,26 @@ describe('AuthService', () => {
     await service.logout('r1');
     expect(cache.del).toHaveBeenCalledWith('rotated:r1');
   });
+
+  it('logout при мертвому Redis → 503, а не мовчазна втрата ревокації', async () => {
+    cache.isConnected.mockReturnValue(false);
+    await expect(service.logout('r1')).rejects.toThrow(
+      ServiceUnavailableException,
+    );
+    expect(cache.set).not.toHaveBeenCalled();
+    expect(cache.del).not.toHaveBeenCalled();
+  });
+
+  it('refresh при мертвому Redis працює (деградація з warn, а не 501 сесій)', async () => {
+    cache.isConnected.mockReturnValue(false);
+    const res = await service.refresh('old');
+    expect(res.accessToken).toBe('access-tok');
+    expect(cache.setIfNotExists).toHaveBeenCalledWith(
+      'revoked:old',
+      true,
+      expect.any(Number),
+    );
+  });
 });
 
 describe('AuthService — видалення юзера фінальне', () => {
@@ -248,6 +270,7 @@ describe('AuthService — видалення юзера фінальне', () =>
       set: jest.fn().mockResolvedValue(undefined),
       del: jest.fn().mockResolvedValue(undefined),
       setIfNotExists: jest.fn().mockResolvedValue(true),
+      isConnected: jest.fn().mockReturnValue(true),
     };
     const module = await Test.createTestingModule({
       providers: [

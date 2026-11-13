@@ -2,6 +2,8 @@ import {
   BadRequestException,
   Injectable,
   InternalServerErrorException,
+  Logger,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { UsersService } from '../../users/users.service';
@@ -24,6 +26,8 @@ export class AuthService {
     private readonly tokens: TokenService,
     private readonly cache: CacheService,
   ) {}
+
+  private readonly logger = new Logger(AuthService.name);
 
   async register(dto: RegisterDto) {
     if (!dto.acceptEula) {
@@ -79,6 +83,16 @@ export class AuthService {
       throw new UnauthorizedException('Обліковий запис видалено');
     const roles = await this.getUserRoles(user.id);
 
+    // Redis мертвий → claim і ревокація не працюють: кожен претендент
+    // вважає себе переможцем і ротує пару, reuse старого токена не ловиться.
+    // Це свідомо задокументована деградація (інакше аутаг Redis убивав би
+    // всі сесії за 15 хв), але не мовчазна — фіксуємо її в логах.
+    if (!this.cache.isConnected()) {
+      this.logger.warn(
+        'Redis недоступний: ревокація та reuse-детекція refresh-токенів вимкнені',
+      );
+    }
+
     // Ротація за атомарним claim: кілька паралельних запитів з одним
     // простроченим access-токеном одночасно пред'являють той самий
     // refresh-токен, а SET NX віддає перемогу рівно одному з них. Переможець
@@ -114,6 +128,14 @@ export class AuthService {
   }
 
   async logout(refreshToken: string) {
+    // Ревокація живить reuse-захист: тихо проглотити її при мертвому Redis —
+    // значить лишити скасований refresh-токен живим на 30 днів. Тому падіння
+    // сховища тут гучна відмова, а не мовчазна втрата.
+    if (!this.cache.isConnected()) {
+      throw new ServiceUnavailableException(
+        'Сховище сесій недоступне — вихід не виконано, спробуйте пізніше',
+      );
+    }
     await this.cache.set(`revoked:${refreshToken}`, true, 60 * 60 * 24 * 30);
     // Grace-пару цього токена теж знищуємо: після логауту reuse протягом вікна
     // не має повернути живу пару
