@@ -224,6 +224,19 @@ describe('HangoutsService', () => {
     expect(events.emit).not.toHaveBeenCalled();
   });
 
+  it('cancel завершеної зустрічі → 409, без «скасування заднім числом»', async () => {
+    hangouts.findOne.mockResolvedValueOnce({
+      id: 'h1',
+      creatorId: 'u1',
+      status: HangoutStatus.Completed,
+    });
+    await expect(service.cancel('u1', 'h1')).rejects.toThrow(
+      new ConflictException('Завершену зустріч скасувати не можна'),
+    );
+    expect(hangouts.save).not.toHaveBeenCalled();
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+
   it('leave blocks creator when others present', async () => {
     hangouts.findOne.mockResolvedValueOnce({
       id: 'h1',

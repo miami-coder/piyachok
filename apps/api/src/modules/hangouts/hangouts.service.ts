@@ -173,9 +173,14 @@ export class HangoutsService {
     if (h.creatorId !== userId) {
       throw new ForbiddenException('Тільки творець може скасувати');
     }
-    // Повторне скасування: не зберігаємо вдруге і не шлемо подію ще раз
+    // Скасувати можна лише живу заявку: скасована не скасовується вдруге
+    // (без повторного збереження і події), завершена кроном не перетікає
+    // заднім числом у cancelled
     if (h.status === HangoutStatus.Cancelled) {
       throw new ConflictException('Заявка вже скасована');
+    }
+    if (h.status !== HangoutStatus.Open && h.status !== HangoutStatus.Filled) {
+      throw new ConflictException('Завершену зустріч скасувати не можна');
     }
     h.status = HangoutStatus.Cancelled;
     await this.hangouts.save(h);
