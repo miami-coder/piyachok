@@ -4,6 +4,7 @@ import {
   OnModuleDestroy,
   OnModuleInit,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
 /**
@@ -24,6 +25,8 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
   private downLogged = false;
   private everConnected = false;
   private reconnectSweeper: NodeJS.Timeout | null = null;
+
+  constructor(private readonly config: ConfigService) {}
 
   async onModuleInit() {
     this.createClient();
@@ -68,11 +71,14 @@ export class CacheService implements OnModuleInit, OnModuleDestroy {
       // замість один раз спробувати і мовчки померти назавжди.
       retryStrategy: (times: number) => Math.min(times * 1000, 30_000),
     } as const;
-    this.client = process.env.REDIS_URL
-      ? new Redis(process.env.REDIS_URL, commonOpts)
+    // Host/port/URL приходять з валідованого конфіга (дефолти — в EnvVars).
+    const redisUrl = this.config.get<string>('REDIS_URL');
+    const redisPort = Number(this.config.get<number>('REDIS_PORT')) || 6379;
+    this.client = redisUrl
+      ? new Redis(redisUrl, commonOpts)
       : new Redis({
-          host: process.env.REDIS_HOST ?? 'localhost',
-          port: Number(process.env.REDIS_PORT ?? 6379),
+          host: this.config.get<string>('REDIS_HOST'),
+          port: redisPort,
           ...commonOpts,
         });
 

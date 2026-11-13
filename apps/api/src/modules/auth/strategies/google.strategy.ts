@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-google-oauth20';
 import { UsersService } from '../../users/users.service';
@@ -13,27 +14,34 @@ interface GoogleProfile {
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   private readonly users: UsersService;
+  private readonly config: ConfigService;
 
-  constructor(users: UsersService) {
-    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+  constructor(
+    users: UsersService,
+    // OAuth-варси приходять з валідованого конфіга; дефолти (включно з
+    // callback-URL) задані в EnvVars, тому тут без фоллбек-констант.
+    config: ConfigService,
+  ) {
+    const clientID = config.get<string>('GOOGLE_CLIENT_ID');
+    const clientSecret = config.get<string>('GOOGLE_CLIENT_SECRET');
+    if (!clientID || !clientSecret) {
       // Пропускаємо реєстрацію стратегії, якщо OAuth не налаштований
       super({
         clientID: 'placeholder',
         clientSecret: 'placeholder',
-        callbackURL:
-          process.env.GOOGLE_CALLBACK_URL ??
-          'http://localhost:3000/api/v1/auth/google/callback',
+        callbackURL: config.getOrThrow<string>('GOOGLE_CALLBACK_URL'),
         scope: ['email', 'profile'],
       });
     } else {
       super({
-        clientID: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: process.env.GOOGLE_CALLBACK_URL!,
+        clientID,
+        clientSecret,
+        callbackURL: config.getOrThrow<string>('GOOGLE_CALLBACK_URL'),
         scope: ['email', 'profile'],
       });
     }
     this.users = users;
+    this.config = config;
   }
 
   async validate(

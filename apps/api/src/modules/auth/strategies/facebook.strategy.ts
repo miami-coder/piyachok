@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, Profile } from 'passport-facebook';
 import { UsersService } from '../../users/users.service';
@@ -6,26 +7,33 @@ import { UsersService } from '../../users/users.service';
 @Injectable()
 export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
   private readonly users: UsersService;
+  private readonly config: ConfigService;
 
-  constructor(users: UsersService) {
-    if (!process.env.FACEBOOK_APP_ID || !process.env.FACEBOOK_APP_SECRET) {
+  constructor(
+    users: UsersService,
+    // OAuth-варси приходять з валідованого конфіга; дефолти (включно з
+    // callback-URL) задані в EnvVars, тому тут без фоллбек-констант.
+    config: ConfigService,
+  ) {
+    const clientID = config.get<string>('FACEBOOK_APP_ID');
+    const clientSecret = config.get<string>('FACEBOOK_APP_SECRET');
+    if (!clientID || !clientSecret) {
       super({
         clientID: 'placeholder',
         clientSecret: 'placeholder',
-        callbackURL:
-          process.env.FACEBOOK_CALLBACK_URL ??
-          'http://localhost:3000/api/v1/auth/facebook/callback',
+        callbackURL: config.getOrThrow<string>('FACEBOOK_CALLBACK_URL'),
         profileFields: ['id', 'emails', 'name', 'displayName'],
       });
     } else {
       super({
-        clientID: process.env.FACEBOOK_APP_ID,
-        clientSecret: process.env.FACEBOOK_APP_SECRET,
-        callbackURL: process.env.FACEBOOK_CALLBACK_URL!,
+        clientID,
+        clientSecret,
+        callbackURL: config.getOrThrow<string>('FACEBOOK_CALLBACK_URL'),
         profileFields: ['id', 'emails', 'name', 'displayName'],
       });
     }
     this.users = users;
+    this.config = config;
   }
 
   async validate(

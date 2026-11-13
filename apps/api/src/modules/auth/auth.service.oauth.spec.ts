@@ -1,3 +1,4 @@
+import { makeConfigMock } from '../../testing/config-mock';
 import { OAuthHandlerService } from './auth.service.oauth';
 
 describe('OAuthHandlerService', () => {
@@ -9,7 +10,7 @@ describe('OAuthHandlerService', () => {
       getRolesForUser: jest.fn(),
       issueTokensForUser: jest.fn(),
     };
-    service = new OAuthHandlerService(auth);
+    service = new OAuthHandlerService(auth, makeConfigMock());
   });
 
   afterEach(() => {

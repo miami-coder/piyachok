@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { makeConfigMock } from '../../testing/config-mock';
 import { FileStorageService } from './file-storage.service';
 
 // PNG-магія (89 50 4E 47 0D 0A 1A 0A)
@@ -26,7 +27,7 @@ describe('FileStorageService — тип файлу за magic bytes', () => {
   let writeFileMock: jest.Mock;
 
   beforeEach(() => {
-    service = new FileStorageService();
+    service = new FileStorageService(makeConfigMock());
     writeFileMock = jest.fn();
     jest.spyOn(service as any, 'useBlobMode', 'get').mockReturnValue(false);
     jest

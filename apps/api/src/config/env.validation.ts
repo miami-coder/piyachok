@@ -28,6 +28,15 @@ export class EnvVars {
 
   @IsString() REDIS_HOST: string = 'localhost';
   @IsNumber() REDIS_PORT: number = 6379;
+  // Хостед-редіс: якщо задано, пріоритетніше за REDIS_HOST/REDIS_PORT
+  @IsString() REDIS_URL: string = '';
+
+  // Директорія локального зберігання файлів (порожнє значення = uploads/ у cwd)
+  @IsString() UPLOADS_DIR: string = '';
+
+  // Blob-режим зберігання (Vercel): активний, якщо заданий хоча б один
+  @IsString() BLOB_STORE_ID: string = '';
+  @IsString() BLOB_READ_WRITE_TOKEN: string = '';
 
   // Секрети обов'язкові і не мають дефолтів: без них конфігурація не повинна валідуватись
   @IsString() @IsNotEmpty() @MinLength(16) JWT_ACCESS_SECRET!: string;
@@ -37,11 +46,15 @@ export class EnvVars {
 
   @IsString() GOOGLE_CLIENT_ID: string = '';
   @IsString() GOOGLE_CLIENT_SECRET: string = '';
-  @IsString() GOOGLE_CALLBACK_URL: string = '';
+  @IsString()
+  GOOGLE_CALLBACK_URL: string =
+    'http://localhost:3000/api/v1/auth/google/callback';
 
   @IsString() FACEBOOK_APP_ID: string = '';
   @IsString() FACEBOOK_APP_SECRET: string = '';
-  @IsString() FACEBOOK_CALLBACK_URL: string = '';
+  @IsString()
+  FACEBOOK_CALLBACK_URL: string =
+    'http://localhost:3000/api/v1/auth/facebook/callback';
 
   @IsString() FRONTEND_URL: string = 'http://localhost:3001';
   @IsString() LOG_LEVEL: string = 'debug';

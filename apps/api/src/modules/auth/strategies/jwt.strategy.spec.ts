@@ -1,4 +1,5 @@
 import { UnauthorizedException } from '@nestjs/common';
+import { makeConfigMock } from '../../../testing/config-mock';
 import { JwtStrategy } from './jwt.strategy';
 
 describe('JwtStrategy', () => {
@@ -7,7 +8,7 @@ describe('JwtStrategy', () => {
 
   beforeEach(() => {
     process.env.JWT_ACCESS_SECRET = SECRET;
-    strategy = new JwtStrategy();
+    strategy = new JwtStrategy(makeConfigMock());
   });
 
   it('validate returns user from token payload', async () => {
@@ -38,7 +39,7 @@ describe('JwtStrategy — видалений юзер (Redis живий)', () =>
       get: jest.fn().mockResolvedValue(true),
       set: jest.fn().mockResolvedValue(undefined),
     };
-    const strategy = new JwtStrategy(cache as any);
+    const strategy = new JwtStrategy(makeConfigMock(), cache as any);
     await expect(
       strategy.validate({ sub: 'u-del', email: 'a@b.com', roles: ['user'] }),
     ).rejects.toThrow(UnauthorizedException);
@@ -50,7 +51,7 @@ describe('JwtStrategy — видалений юзер (Redis живий)', () =>
       isConnected: jest.fn().mockReturnValue(true),
       get: jest.fn().mockResolvedValue(null),
     };
-    const strategy = new JwtStrategy(cache as any);
+    const strategy = new JwtStrategy(makeConfigMock(), cache as any);
     const user = await strategy.validate({
       sub: 'u-ok',
       email: 'a@b.com',
@@ -77,15 +78,18 @@ describe('JwtStrategy — Redis мертвий: fallback на БД', () => {
       get: jest.fn(),
       set: jest.fn(),
     };
-    return { cache, strategy: new JwtStrategy(cache as any, users as any) };
+    return {
+      cache,
+      strategy: new JwtStrategy(makeConfigMock(), cache as any, users as any),
+    };
   };
 
   it('deletedAt у БД → 401 навіть без прапора кешу', async () => {
     users.findById.mockResolvedValue({ id: 'u-del', deletedAt: new Date() });
     const { cache, strategy: s } = strategy();
-    await expect(s.validate({ sub: 'u-del', email: 'a@b.com' })).rejects.toThrow(
-      UnauthorizedException,
-    );
+    await expect(
+      s.validate({ sub: 'u-del', email: 'a@b.com' }),
+    ).rejects.toThrow(UnauthorizedException);
     expect(cache.get).not.toHaveBeenCalled();
   });
 

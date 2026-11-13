@@ -1,3 +1,4 @@
+import { makeConfigMock } from '../../../testing/config-mock';
 import { FacebookStrategy } from './facebook.strategy';
 
 describe('FacebookStrategy', () => {
@@ -18,7 +19,7 @@ describe('FacebookStrategy', () => {
 
   beforeEach(() => {
     users = { findOrCreateOAuthUser: jest.fn() };
-    strategy = new FacebookStrategy(users);
+    strategy = new FacebookStrategy(users, makeConfigMock());
   });
 
   it('creates user from profile email and calls done(null, user)', async () => {

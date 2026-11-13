@@ -1,5 +1,7 @@
+import { ConfigService } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
+import { makeConfigMock } from '../../../testing/config-mock';
 import { TokenService } from './jwt.service';
 
 describe('TokenService', () => {
@@ -11,7 +13,10 @@ describe('TokenService', () => {
     process.env.JWT_REFRESH_SECRET = 'test_refresh_secret_min_32_chars_x';
     const module = await Test.createTestingModule({
       imports: [JwtModule.register({})],
-      providers: [TokenService],
+      providers: [
+        TokenService,
+        { provide: ConfigService, useValue: makeConfigMock() },
+      ],
     }).compile();
     service = module.get(TokenService);
     raw = module.get(JwtService);

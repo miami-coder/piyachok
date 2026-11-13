@@ -1,23 +1,32 @@
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { makeConfigMock } from '../../testing/config-mock';
 import { CacheService } from './cache.service';
 
 describe('CacheService', () => {
   let service: CacheService;
   const origHost = process.env.REDIS_HOST;
   const origPort = process.env.REDIS_PORT;
+  const origUrl = process.env.REDIS_URL;
 
   beforeEach(async () => {
     // Направляємо на недосяжний порт, щоб no-op fallback-гілка відпрацьовувала
     // детерміновано, незалежно від того, чи запущено справжній Redis.
+    delete process.env.REDIS_URL;
     process.env.REDIS_HOST = '127.0.0.1';
     process.env.REDIS_PORT = '1';
     const module = await Test.createTestingModule({
-      providers: [CacheService],
+      providers: [
+        CacheService,
+        { provide: ConfigService, useValue: makeConfigMock() },
+      ],
     }).compile();
     service = module.get(CacheService);
   });
 
   afterEach(async () => {
+    if (origUrl === undefined) delete process.env.REDIS_URL;
+    else process.env.REDIS_URL = origUrl;
     if (origHost === undefined) delete process.env.REDIS_HOST;
     else process.env.REDIS_HOST = origHost;
     if (origPort === undefined) delete process.env.REDIS_PORT;

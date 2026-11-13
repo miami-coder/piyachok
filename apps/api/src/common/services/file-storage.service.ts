@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
@@ -51,6 +52,8 @@ const MIME_FROM_TYPE: Record<'jpeg' | 'png' | 'webp', string> = {
  */
 @Injectable()
 export class FileStorageService {
+  constructor(private readonly config: ConfigService) {}
+
   async save(
     folder: string,
     file: {
@@ -105,11 +108,15 @@ export class FileStorageService {
   // сам ресолвить OIDC-креденшіали в середовищі Vercel).
   private get useBlobMode(): boolean {
     return Boolean(
-      process.env.BLOB_STORE_ID || process.env.BLOB_READ_WRITE_TOKEN,
+      this.config.get<string>('BLOB_STORE_ID') ||
+      this.config.get<string>('BLOB_READ_WRITE_TOKEN'),
     );
   }
 
+  // Порожній UPLOADS_DIR (дефолт з EnvVars) = uploads/ у поточній директорії.
   private get uploadsRoot(): string {
-    return process.env.UPLOADS_DIR ?? join(process.cwd(), 'uploads');
+    return (
+      this.config.get<string>('UPLOADS_DIR') || join(process.cwd(), 'uploads')
+    );
   }
 }

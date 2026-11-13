@@ -1,3 +1,4 @@
+import { makeConfigMock } from '../../../testing/config-mock';
 import { GoogleStrategy } from './google.strategy';
 
 describe('GoogleStrategy', () => {
@@ -18,7 +19,7 @@ describe('GoogleStrategy', () => {
 
   beforeEach(() => {
     users = { findOrCreateOAuthUser: jest.fn() };
-    strategy = new GoogleStrategy(users);
+    strategy = new GoogleStrategy(users, makeConfigMock());
   });
 
   it('creates user from profile email and calls done(null, user)', async () => {
