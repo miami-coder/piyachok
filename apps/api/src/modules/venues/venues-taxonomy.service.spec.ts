@@ -69,9 +69,11 @@ describe('VenueTaxonomyService', () => {
         groupBy: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         addOrderBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([
-          { id: 't1', name: 'Крафт', slug: 'kraft', venueCount: 5 },
-        ]),
+        getRawMany: jest
+          .fn()
+          .mockResolvedValue([
+            { id: 't1', name: 'Крафт', slug: 'kraft', venueCount: 5 },
+          ]),
       };
       tagsRepo.createQueryBuilder = jest.fn().mockReturnValue(tagQb);
       const rows = await service.listTags();
@@ -143,9 +145,7 @@ describe('VenueTaxonomyService', () => {
 
   describe('write* — повна заміна привʼязок', () => {
     it('writeFeatures: delete старих + save нових; порожній набір — delete без save', async () => {
-      await service.writeFeatures('v1', [
-        { id: 'f2', code: 'terrace' } as any,
-      ]);
+      await service.writeFeatures('v1', [{ id: 'f2', code: 'terrace' } as any]);
       expect(featureAssignmentsRepo.delete).toHaveBeenCalledWith({
         venueId: 'v1',
       });

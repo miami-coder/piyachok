@@ -620,7 +620,6 @@ describe('VenuesService.findOnePublic — санітизація власник�
     expect(res.owner.profile.firstname).toBe('Олена');
     expect(res.owner.profile.phone).toBeUndefined();
   });
-
 });
 
 describe('VenuesService — модерація закладів', () => {

@@ -44,6 +44,11 @@ import { MeVenuesController } from './me-venues.controller';
     VenuesAdminService,
     VenueCacheListener,
   ],
-  exports: [VenuesService, VenueTaxonomyService, VenuesCatalogService, TypeOrmModule],
+  exports: [
+    VenuesService,
+    VenueTaxonomyService,
+    VenuesCatalogService,
+    TypeOrmModule,
+  ],
 })
 export class VenuesModule {}

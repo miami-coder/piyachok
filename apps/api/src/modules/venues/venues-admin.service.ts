@@ -8,7 +8,10 @@ import { RoleGrantsService } from '../rbac/role-grants.service';
 import { RoleCode } from '../rbac/entities/role.enum';
 import { AuditService } from '../admin/audit.service';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
-import { buildMeta, normalizePagination } from '../../common/utils/pagination.util';
+import {
+  buildMeta,
+  normalizePagination,
+} from '../../common/utils/pagination.util';
 import { VENUE_STATUS_CHANGED, VenueStatusChangedEvent } from './events';
 
 /**

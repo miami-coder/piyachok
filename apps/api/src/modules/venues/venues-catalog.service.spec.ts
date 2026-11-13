@@ -98,9 +98,7 @@ describe('VenuesCatalogService', () => {
       const sqls = mockQb.andWhere.mock.calls.map(
         (c: unknown[]) => c[0] as string,
       );
-      expect(sqls.some((s: string) => s.includes('recommendedBy'))).toBe(
-        false,
-      );
+      expect(sqls.some((s: string) => s.includes('recommendedBy'))).toBe(false);
     });
 
     it('фічі/теги — AND-семантика (заклад має ВСІ запитані), CSV не втрачає значення', async () => {
