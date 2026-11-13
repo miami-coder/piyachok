@@ -12,8 +12,6 @@ import { VenuesService } from './venues.service';
 import { RbacModule } from '../rbac/rbac.module';
 import { UsersModule } from '../users/users.module';
 import { AdminModule } from '../admin/admin.module';
-import { Role } from '../rbac/entities/role.entity';
-import { UserRole } from '../rbac/entities/user-role.entity';
 import { VenueCacheListener } from './listeners/venue-cache.listener';
 import { VenuesController } from './venues.controller';
 import { VenuesAdminController } from './venues-admin.controller';
@@ -30,8 +28,6 @@ import { MeVenuesController } from './me-venues.controller';
       VenueTag,
       VenueType,
       VenueTypeAssignment,
-      Role,
-      UserRole,
     ]),
     RbacModule,
     UsersModule,

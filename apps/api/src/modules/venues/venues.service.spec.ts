@@ -16,10 +16,9 @@ import { VenueTag } from './entities/venue-tag.entity';
 import { VenueType } from './entities/venue-type.entity';
 import { VenueTypeAssignment } from './entities/venue-type-assignment.entity';
 import { PermissionsService } from '../rbac/permissions.service';
+import { RoleGrantsService } from '../rbac/role-grants.service';
 import { CacheService } from '../../common/services/cache.service';
 import { FileStorageService } from '../../common/services/file-storage.service';
-import { Role } from '../rbac/entities/role.entity';
-import { UserRole } from '../rbac/entities/user-role.entity';
 import { AuditService } from '../admin/audit.service';
 import type { SanitizedUser } from '../../common/utils/sanitize-user';
 
@@ -47,8 +46,7 @@ describe('VenuesService', () => {
   let cache: any;
   let events: any;
   let storage: any;
-  let roles: any;
-  let userRoles: any;
+  let roleGrants: any;
   let audit: any;
   let featuresRepo: any;
   let tagsRepo: any;
@@ -73,8 +71,7 @@ describe('VenuesService', () => {
     venueTypesRepo = { findOne: jest.fn() };
     venueTypeAssignmentsRepo = { save: jest.fn(), delete: jest.fn() };
     perms = { hasPermission: jest.fn(), invalidate: jest.fn() };
-    roles = { findOne: jest.fn() };
-    userRoles = { findOne: jest.fn(), save: jest.fn() };
+    roleGrants = { grant: jest.fn() };
     audit = { log: jest.fn() };
     cache = {
       get: jest.fn().mockResolvedValue(null),
@@ -116,8 +113,7 @@ describe('VenuesService', () => {
         { provide: CacheService, useValue: cache },
         { provide: EventEmitter2, useValue: events },
         { provide: FileStorageService, useValue: storage },
-        { provide: getRepositoryToken(Role), useValue: roles },
-        { provide: getRepositoryToken(UserRole), useValue: userRoles },
+        { provide: RoleGrantsService, useValue: roleGrants },
         { provide: AuditService, useValue: audit },
       ],
     }).compile();
@@ -361,16 +357,10 @@ describe('VenuesService', () => {
       ownerId: 'u1',
       status: VenueStatus.Pending,
     });
-    roles.findOne.mockResolvedValueOnce({ id: 'r1', code: 'venue_admin' });
-    userRoles.findOne.mockResolvedValueOnce(null); // ролі ще нема
+    roleGrants.grant.mockResolvedValueOnce(true);
     const v = await service.approve('admin1', 'v1');
     expect(v.status).toBe(VenueStatus.Approved);
-    expect(userRoles.save).toHaveBeenCalledWith({
-      userId: 'u1',
-      roleId: 'r1',
-    });
-    // кеш пермішенів власника скидається — роль набирає сили одразу
-    expect(perms.invalidate).toHaveBeenCalledWith('u1');
+    expect(roleGrants.grant).toHaveBeenCalledWith('u1', 'venue_admin');
     expect(audit.log).toHaveBeenCalledWith(
       'admin1',
       'venue_approve',
@@ -392,10 +382,9 @@ describe('VenuesService', () => {
       ownerId: 'u1',
       status: VenueStatus.Pending,
     });
-    roles.findOne.mockResolvedValueOnce({ id: 'r1', code: 'venue_admin' });
-    userRoles.findOne.mockResolvedValueOnce({ userId: 'u1', roleId: 'r1' });
+    roleGrants.grant.mockResolvedValueOnce(false); // вже видана
     await service.approve('admin1', 'v1');
-    expect(userRoles.save).not.toHaveBeenCalled();
+    expect(roleGrants.grant).toHaveBeenCalledTimes(1);
   });
 
   it('approve за відсутності ролі venue_admin у системі — статус змінює, роль не видає', async () => {
@@ -409,11 +398,10 @@ describe('VenuesService', () => {
       ownerId: 'u1',
       status: VenueStatus.Pending,
     });
-    roles.findOne.mockResolvedValueOnce(null);
+    roleGrants.grant.mockResolvedValueOnce(false);
     const v = await service.approve('admin1', 'v1');
     expect(v.status).toBe(VenueStatus.Approved);
-    expect(userRoles.save).not.toHaveBeenCalled();
-    expect(perms.invalidate).not.toHaveBeenCalled();
+    expect(roleGrants.grant).toHaveBeenCalledTimes(1);
   });
 
   describe('assignOwner', () => {
@@ -423,17 +411,12 @@ describe('VenuesService', () => {
         ownerId: 'old',
         status: VenueStatus.Approved,
       });
-      roles.findOne.mockResolvedValueOnce({ id: 'r1', code: 'venue_admin' });
-      userRoles.findOne.mockResolvedValueOnce(null); // ролі ще нема
+      roleGrants.grant.mockResolvedValueOnce(true);
       await service.assignOwner('admin1', 'v1', 'u1');
       expect(venues.save).toHaveBeenCalledWith(
         expect.objectContaining({ ownerId: 'u1' }),
       );
-      expect(userRoles.save).toHaveBeenCalledWith({
-        userId: 'u1',
-        roleId: 'r1',
-      });
-      expect(perms.invalidate).toHaveBeenCalledWith('u1');
+      expect(roleGrants.grant).toHaveBeenCalledWith('u1', 'venue_admin');
       expect(audit.log).toHaveBeenCalledWith(
         'admin1',
         'venue_assign_owner',
@@ -451,9 +434,7 @@ describe('VenuesService', () => {
         status: VenueStatus.Pending,
       });
       await service.assignOwner('admin1', 'v1', 'u1');
-      expect(roles.findOne).not.toHaveBeenCalled();
-      expect(userRoles.save).not.toHaveBeenCalled();
-      expect(perms.invalidate).not.toHaveBeenCalled();
+      expect(roleGrants.grant).not.toHaveBeenCalled();
       expect(audit.log).toHaveBeenCalledWith(
         'admin1',
         'venue_assign_owner',
@@ -470,11 +451,9 @@ describe('VenuesService', () => {
         ownerId: 'old',
         status: VenueStatus.Approved,
       });
-      roles.findOne.mockResolvedValueOnce({ id: 'r1', code: 'venue_admin' });
-      userRoles.findOne.mockResolvedValueOnce({ userId: 'u1', roleId: 'r1' });
+      roleGrants.grant.mockResolvedValueOnce(false);
       await service.assignOwner('admin1', 'v1', 'u1');
-      expect(userRoles.save).not.toHaveBeenCalled();
-      expect(perms.invalidate).not.toHaveBeenCalled();
+      expect(roleGrants.grant).toHaveBeenCalledTimes(1);
       expect(audit.log).toHaveBeenCalledWith(
         'admin1',
         'venue_assign_owner',
@@ -765,8 +744,7 @@ describe('VenuesService.findOnePublic — санітизація власник�
   let events: any;
   let storage: any;
   let photos: any;
-  let roles: any;
-  let userRoles: any;
+  let roleGrants: any;
   let audit: any;
 
   beforeEach(async () => {
@@ -775,8 +753,7 @@ describe('VenuesService.findOnePublic — санітизація власник�
     cache = { get: jest.fn().mockResolvedValue(undefined), set: jest.fn() };
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };
-    roles = {};
-    userRoles = {};
+    roleGrants = { grant: jest.fn() };
     audit = {};
     venues = {
       findOne: jest.fn(),
@@ -808,8 +785,7 @@ describe('VenuesService.findOnePublic — санітизація власник�
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
         { provide: FileStorageService, useValue: storage },
-        { provide: getRepositoryToken(Role), useValue: roles },
-        { provide: getRepositoryToken(UserRole), useValue: userRoles },
+        { provide: RoleGrantsService, useValue: roleGrants },
         { provide: AuditService, useValue: audit },
         { provide: EventEmitter2, useValue: events },
       ],
@@ -882,8 +858,7 @@ describe('VenuesService.search — кеш-хіт повторної сторін
   let events: any;
   let storage: any;
   let audit: any;
-  let roles: any;
-  let userRoles: any;
+  let roleGrants: any;
 
   beforeEach(async () => {
     perms = { hasPermission: jest.fn().mockResolvedValue(false) };
@@ -891,8 +866,7 @@ describe('VenuesService.search — кеш-хіт повторної сторін
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };
     audit = {};
-    roles = {};
-    userRoles = {};
+    roleGrants = { grant: jest.fn() };
     venues = {
       findOne: jest.fn(),
       save: jest.fn(),
@@ -923,8 +897,7 @@ describe('VenuesService.search — кеш-хіт повторної сторін
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
         { provide: FileStorageService, useValue: storage },
-        { provide: getRepositoryToken(Role), useValue: roles },
-        { provide: getRepositoryToken(UserRole), useValue: userRoles },
+        { provide: RoleGrantsService, useValue: roleGrants },
         { provide: AuditService, useValue: audit },
         { provide: EventEmitter2, useValue: events },
       ],
@@ -961,8 +934,7 @@ describe('VenuesService — модерація закладів', () => {
   let events: any;
   let storage: any;
   let audit: any;
-  let roles: any;
-  let userRoles: any;
+  let roleGrants: any;
 
   beforeEach(async () => {
     perms = { hasPermission: jest.fn().mockResolvedValue(false) };
@@ -970,8 +942,7 @@ describe('VenuesService — модерація закладів', () => {
     events = { emit: jest.fn() };
     storage = { save: jest.fn(), remove: jest.fn() };
     audit = { log: jest.fn().mockResolvedValue(undefined) };
-    roles = {};
-    userRoles = { findOne: jest.fn().mockResolvedValue({ id: 'ur1' }) };
+    roleGrants = { grant: jest.fn().mockResolvedValue(false) };
     venues = {
       findOne: jest.fn(),
       save: jest.fn((v) => v),
@@ -1002,8 +973,7 @@ describe('VenuesService — модерація закладів', () => {
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
         { provide: FileStorageService, useValue: storage },
-        { provide: getRepositoryToken(Role), useValue: roles },
-        { provide: getRepositoryToken(UserRole), useValue: userRoles },
+        { provide: RoleGrantsService, useValue: roleGrants },
         { provide: AuditService, useValue: audit },
         { provide: EventEmitter2, useValue: events },
       ],
@@ -1069,8 +1039,10 @@ describe('VenuesService.search — %/_ літерали, не wildcard', () => {
         { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
         { provide: FileStorageService, useValue: { save: jest.fn() } },
-        { provide: getRepositoryToken(Role), useValue: {} },
-        { provide: getRepositoryToken(UserRole), useValue: {} },
+        {
+          provide: RoleGrantsService,
+          useValue: { grant: jest.fn().mockResolvedValue(false) },
+        },
         { provide: AuditService, useValue: {} },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],
@@ -1142,8 +1114,10 @@ describe('VenuesService — довідники типів і фіч (для sele
         { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
         { provide: FileStorageService, useValue: { save: jest.fn() } },
-        { provide: getRepositoryToken(Role), useValue: {} },
-        { provide: getRepositoryToken(UserRole), useValue: {} },
+        {
+          provide: RoleGrantsService,
+          useValue: { grant: jest.fn().mockResolvedValue(false) },
+        },
         { provide: AuditService, useValue: {} },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
       ],

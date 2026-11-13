@@ -20,9 +20,8 @@ import { UpdateVenueDto } from './dto/update-venue.dto';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
 import { QueryVenuesDto, VenueSort } from './dto/query-venues.dto';
 import { PermissionsService } from '../rbac/permissions.service';
-import { Role } from '../rbac/entities/role.entity';
+import { RoleGrantsService } from '../rbac/role-grants.service';
 import { RoleCode } from '../rbac/entities/role.enum';
-import { UserRole } from '../rbac/entities/user-role.entity';
 import { AuditService } from '../admin/audit.service';
 import { CacheService } from '../../common/services/cache.service';
 import { FileStorageService } from '../../common/services/file-storage.service';
@@ -76,10 +75,8 @@ export class VenuesService {
     private readonly venueTypes: Repository<VenueType>,
     @InjectRepository(VenueTypeAssignment)
     private readonly venueTypeAssignments: Repository<VenueTypeAssignment>,
-    @InjectRepository(Role) private readonly roles: Repository<Role>,
-    @InjectRepository(UserRole)
-    private readonly userRoles: Repository<UserRole>,
     private readonly perms: PermissionsService,
+    private readonly roleGrants: RoleGrantsService,
     private readonly audit: AuditService,
     private readonly cache: CacheService,
     private readonly events: EventEmitter2,
@@ -294,7 +291,7 @@ export class VenuesService {
     const saved = await this.venues.save(venue);
     const roleGranted =
       venue.status === VenueStatus.Approved
-        ? await this.grantVenueAdmin(userId)
+        ? await this.roleGrants.grant(userId, RoleCode.VenueAdmin)
         : false;
     await this.audit.log(
       actorId,
@@ -595,7 +592,7 @@ export class VenuesService {
       throw new ForbiddenException('Видалений заклад не можна підтвердити');
     const venue = await this.changeStatus(venueId, VenueStatus.Approved);
     const roleGranted = venue.ownerId
-      ? await this.grantVenueAdmin(venue.ownerId)
+      ? await this.roleGrants.grant(venue.ownerId, RoleCode.VenueAdmin)
       : false;
     await this.audit.log(actorId, 'venue_approve', 'venue', venueId, null, {
       status: 'approved',
@@ -603,22 +600,6 @@ export class VenuesService {
       roleGranted,
     });
     return venue;
-  }
-
-  // Ідемпотентна видача venue_admin власнику схваленого закладу
-  private async grantVenueAdmin(userId: string): Promise<boolean> {
-    const role = await this.roles.findOne({
-      where: { code: RoleCode.VenueAdmin },
-    });
-    if (!role) return false;
-    const existing = await this.userRoles.findOne({
-      where: { userId, roleId: role.id },
-    });
-    if (existing) return false;
-    await this.userRoles.save({ userId, roleId: role.id });
-    // кеш пермішенів (TTL 5 хв) треба скинути, щоб роль набрала сили одразу
-    await this.perms.invalidate(userId);
-    return true;
   }
 
   /** Агрегат «Заклад» має одного власника: мутації його полів із сусідніх
