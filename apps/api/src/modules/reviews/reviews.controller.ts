@@ -44,15 +44,11 @@ import {
   ApiDataResponse,
   ApiPaginatedResponse,
 } from '../../common/swagger/response-helpers';
-import { FileStorageService } from '../../common/services/file-storage.service';
 
 @ApiTags('Reviews')
 @Controller()
 export class ReviewsController {
-  constructor(
-    private readonly reviews: ReviewsService,
-    private readonly storage: FileStorageService,
-  ) {}
+  constructor(private readonly reviews: ReviewsService) {}
 
   @ApiBearerAuth('access-token')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
@@ -77,43 +73,16 @@ export class ReviewsController {
   @ApiForbiddenResponse({ description: 'Немає дозволу review:create' })
   @ApiNotFoundResponse({ description: 'Заклад не знайдено' })
   @ApiBadRequestResponse({ description: 'Невалідні дані / дублікат відгуку' })
-  async create(
+  create(
     @CurrentUser() u: JwtUser,
     @Param('venueId', ParseUuidPipe) venueId: string,
     @Body() dto: CreateReviewDto,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    // Спершу перевіряємо, що відгук взагалі можна створити, і тільки потім
-    // зберігаємо файл — інакше при відмові (404/403/409) він лишався б
-    // на диску без власника.
-    await this.reviews.assertCanCreate(u.sub, venueId);
-    let checkPhotoUrl: string | undefined;
-    let stored: { url: string; filename: string } | undefined;
-    if (file) {
-      stored = await this.storage.save(`reviews/${venueId}`, {
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
-        buffer: file.buffer,
-      });
-      checkPhotoUrl = stored.url;
-    }
-    try {
-      const review = await this.reviews.create(u.sub, venueId, {
-        ...dto,
-        checkPhotoUrl,
-      });
-      return { data: review };
-    } catch (err) {
-      // Захист у глибину: між перевіркою і створенням міг встигнути
-      // паралельний відгук — тоді видаляємо щойно збережений файл.
-      if (stored) {
-        await this.storage
-          .remove(`reviews/${venueId}`, stored.filename)
-          .catch(() => undefined);
-      }
-      throw err;
-    }
+    // Перевірки, збереження файла й cleanup при помилці — у сервісі.
+    return this.reviews
+      .create(u.sub, venueId, dto, file)
+      .then((data) => ({ data }));
   }
 
   @Public()

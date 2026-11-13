@@ -11,6 +11,7 @@ import { Review } from './entities/review.entity';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
 import { makePermsMock } from '../../testing/permissions-mock';
+import { FileStorageService } from '../../common/services/file-storage.service';
 import type { SanitizedUser } from '../../common/utils/sanitize-user';
 
 function qb() {
@@ -18,6 +19,7 @@ function qb() {
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
     getRawOne: jest.fn().mockResolvedValue({ avg: '4.5', count: '2' }),
   };
 }
@@ -29,6 +31,7 @@ describe('ReviewsService', () => {
   let venuesService: any;
   let perms: any;
   let events: any;
+  let storage: any;
 
   beforeEach(async () => {
     reviews = {
@@ -36,6 +39,7 @@ describe('ReviewsService', () => {
       save: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn(),
       delete: jest.fn(),
+      softDelete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
       // em «всерід» — сам мок репозиторію: save/delete/queryBuilder спеки
       // і є тим, що відбувається всередині транзакції
@@ -53,6 +57,12 @@ describe('ReviewsService', () => {
     };
     perms = makePermsMock();
     events = { emit: jest.fn() };
+    storage = {
+      save: jest
+        .fn()
+        .mockResolvedValue({ url: '/static/x.jpg', filename: 'x.jpg' }),
+      remove: jest.fn().mockResolvedValue(undefined),
+    };
     const module = await Test.createTestingModule({
       providers: [
         ReviewsService,
@@ -60,6 +70,7 @@ describe('ReviewsService', () => {
         { provide: VenuesService, useValue: venuesService },
         { provide: PermissionsService, useValue: perms },
         { provide: EventEmitter2, useValue: events },
+        { provide: FileStorageService, useValue: storage },
       ],
     }).compile();
     service = module.get(ReviewsService);
@@ -133,6 +144,49 @@ describe('ReviewsService', () => {
     ).rejects.toThrow(ConflictException);
   });
 
+  it('create з фото чека: перевірки суворо до збереження файла, файл у URL відгуку', async () => {
+    reviews.findOne.mockResolvedValueOnce(null);
+    reviews.save.mockResolvedValueOnce({ id: 'r-new' });
+    const file = {
+      originalname: 'a.jpg',
+      mimetype: 'image/jpeg',
+      size: 1,
+      buffer: Buffer.alloc(1),
+    } as Express.Multer.File;
+    const r = await service.create('u1', 'v1', { rating: 5, text: 'ok' }, file);
+    expect(storage.save).toHaveBeenCalledWith(
+      'reviews/v1',
+      expect.objectContaining({ originalname: 'a.jpg' }),
+    );
+    expect(r.id).toBe('r-new');
+    // URL чека потрапляє саме у запис, що вставляється в базу.
+    expect(reviews.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkPhotoUrl: '/static/x.jpg',
+      }),
+    );
+    expect(storage.remove).not.toHaveBeenCalled();
+    // Порядок: assertCanCreate (findOne дубліката) суворо до збереження файла.
+    expect(reviews.findOne.mock.invocationCallOrder[0]).toBeLessThan(
+      storage.save.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('create з файлом при падінні вставки (23505) прибирає щойно збережений файл', async () => {
+    reviews.findOne.mockResolvedValueOnce(null);
+    reviews.save.mockRejectedValueOnce({ code: '23505' });
+    const file = {
+      originalname: 'a.jpg',
+      mimetype: 'image/jpeg',
+      size: 1,
+      buffer: Buffer.alloc(1),
+    } as Express.Multer.File;
+    await expect(
+      service.create('u1', 'v1', { rating: 5, text: 'ok' }, file),
+    ).rejects.toThrow(ConflictException);
+    expect(storage.remove).toHaveBeenCalledWith('reviews/v1', 'x.jpg');
+  });
+
   it('update forbids non-owner without perm', async () => {
     reviews.findOne.mockResolvedValueOnce({
       id: 'r1',
@@ -161,18 +215,38 @@ describe('ReviewsService', () => {
     );
   });
 
-  it('softDelete removes and recalcs', async () => {
+  it('softDelete помʼякшує відгук і перераховує рейтинг у тій самій транзакції', async () => {
     reviews.findOne.mockResolvedValueOnce({
       id: 'r1',
       userId: 'u1',
       venueId: 'v1',
     });
     await service.softDelete('u1', 'r1');
-    expect(reviews.delete).toHaveBeenCalledWith(Review, 'r1');
+    // Жодного фізичного удаления: тільки softDelete + recalc в em.
+    expect(reviews.delete).not.toHaveBeenCalled();
+    expect(reviews.softDelete).toHaveBeenCalledWith(Review, 'r1');
+    expect(venuesService.updateRatingStats).toHaveBeenCalledWith(
+      'v1',
+      { ratingAvg: 4.5, ratingCount: 2 },
+      reviews,
+    );
     expect(events.emit).toHaveBeenCalledWith(
       'review.deleted',
       expect.anything(),
     );
+  });
+
+  it('recalc не враховує помʼякшені відгуки (andWhere deletedAt IS NULL)', async () => {
+    reviews.findOne.mockResolvedValueOnce({
+      id: 'r1',
+      userId: 'u1',
+      venueId: 'v1',
+    });
+    await service.softDelete('u1', 'r1');
+    const recalcQb = reviews.createQueryBuilder.mock.results.map(
+      (r: any) => r.value,
+    );
+    expect(recalcQb[0].andWhere).toHaveBeenCalledWith('r.deletedAt IS NULL');
   });
 
   describe('feature/unfeature', () => {
@@ -207,6 +281,10 @@ describe('ReviewsService — санітизація авторів відгук�
   let reviews: any;
   let perms: any;
   let events: any;
+  const storage = {
+    save: jest.fn(),
+    remove: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     reviews = {
@@ -214,6 +292,7 @@ describe('ReviewsService — санітизація авторів відгук�
       save: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn(),
       delete: jest.fn(),
+      softDelete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
       // em «всерід» — сам мок репозиторію: save/delete/queryBuilder спеки
       // і є тим, що відбувається всередині транзакції
@@ -235,6 +314,7 @@ describe('ReviewsService — санітизація авторів відгук�
         },
         { provide: PermissionsService, useValue: perms },
         { provide: EventEmitter2, useValue: events },
+        { provide: FileStorageService, useValue: storage },
       ],
     }).compile();
     service = module.get(ReviewsService);
@@ -246,6 +326,7 @@ describe('ReviewsService — санітизація авторів відгук�
       return {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         addOrderBy,
         skip: jest.fn().mockReturnThis(),
@@ -279,6 +360,7 @@ describe('ReviewsService — санітизація авторів відгук�
     reviews.createQueryBuilder.mockReturnValueOnce({
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
@@ -302,6 +384,10 @@ describe('ReviewsService.create — лише схвалені заклади (40
   let venuesService: any;
   let perms: any;
   let events: any;
+  const storage = {
+    save: jest.fn(),
+    remove: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     reviews = {
@@ -309,6 +395,7 @@ describe('ReviewsService.create — лише схвалені заклади (40
       save: jest.fn((x) => x),
       findOne: jest.fn(),
       delete: jest.fn(),
+      softDelete: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
       // em «всерід» — сам мок репозиторію
       manager: { transaction: jest.fn(async (cb: any) => cb(reviews)) },
@@ -331,6 +418,7 @@ describe('ReviewsService.create — лише схвалені заклади (40
         { provide: VenuesService, useValue: venuesService },
         { provide: PermissionsService, useValue: perms },
         { provide: EventEmitter2, useValue: events },
+        { provide: FileStorageService, useValue: storage },
       ],
     }).compile();
     service = module.get(ReviewsService);
@@ -371,7 +459,6 @@ describe('ReviewsService.create — лише схвалені заклади (40
 
 describe('ReviewsService.listForVenue — видалений автор', () => {
   it('автор з deletedAt → isDeleted-псевдо-профіль замість реальних даних', async () => {
-    let service: ReviewsService;
     const reviews = {
       create: jest.fn((x) => x),
       save: jest.fn(),
@@ -380,6 +467,7 @@ describe('ReviewsService.listForVenue — видалений автор', () => 
       createQueryBuilder: jest.fn().mockReturnValueOnce({
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         addOrderBy: jest.fn().mockReturnThis(),
         skip: jest.fn().mockReturnThis(),
@@ -411,9 +499,13 @@ describe('ReviewsService.listForVenue — видалений автор', () => 
         },
         { provide: PermissionsService, useValue: makePermsMock() },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        {
+          provide: FileStorageService,
+          useValue: { save: jest.fn(), remove: jest.fn() },
+        },
       ],
     }).compile();
-    service = module.get(ReviewsService);
+    const service = module.get(ReviewsService);
     const res = await service.listForVenue('v1');
     const u = res.data[0].user as SanitizedUser;
     expect(u.isDeleted).toBe(true);

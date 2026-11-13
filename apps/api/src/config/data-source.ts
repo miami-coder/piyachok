@@ -38,6 +38,7 @@ import { Recommendations1700000010000 } from '../migrations/1700000010000-Recomm
 import { ReviewBillAmount1700000011000 } from '../migrations/1700000011000-ReviewBillAmount';
 import { Top1700000012000 } from '../migrations/1700000012000-Top';
 import { SiteContent1700000013000 } from '../migrations/1700000013000-SiteContent';
+import { ReviewSoftDelete1700000014000 } from '../migrations/1700000014000-ReviewSoftDelete';
 
 loadEnv();
 
@@ -95,6 +96,7 @@ export default new DataSource({
     ReviewBillAmount1700000011000,
     Top1700000012000,
     SiteContent1700000013000,
+    ReviewSoftDelete1700000014000,
   ],
   synchronize: false,
 });

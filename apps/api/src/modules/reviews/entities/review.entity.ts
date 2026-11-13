@@ -1,19 +1,21 @@
 import {
   Column,
   CreateDateColumn,
+  DeleteDateColumn,
   Entity,
   Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
-  Unique,
   UpdateDateColumn,
 } from 'typeorm';
 import { Venue } from '../../venues/entities/venue.entity';
 import { User } from '../../users/entities/user.entity';
 
 @Entity('reviews')
-@Unique(['venueId', 'userId'])
+// Унік пари (venueId, userId) тримає частковий індекс у міграції
+// ReviewSoftDelete (тільки для не видалених відгуків), інакше автор
+// після мʼякого видалення ніколи не зміг би залишити новий відгук.
 @Index(['venueId', 'createdAt'])
 export class Review {
   @PrimaryGeneratedColumn('uuid') id: string;
@@ -27,6 +29,7 @@ export class Review {
   @Column({ type: 'boolean', default: false }) isFeatured: boolean;
   @CreateDateColumn() createdAt: Date;
   @UpdateDateColumn() updatedAt: Date;
+  @DeleteDateColumn({ name: 'deletedAt' }) deletedAt: Date | null;
 
   @ManyToOne(() => Venue, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'venueId' })

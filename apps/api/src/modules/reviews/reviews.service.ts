@@ -12,6 +12,7 @@ import { CreateReviewDto } from './dto/create-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { PermissionsService } from '../rbac/permissions.service';
 import { VenuesService } from '../venues/venues.service';
+import { FileStorageService } from '../../common/services/file-storage.service';
 import { REVIEW_CREATED, REVIEW_DELETED, REVIEW_UPDATED } from './events';
 import {
   buildMeta,
@@ -34,6 +35,7 @@ export class ReviewsService {
     private readonly venuesService: VenuesService,
     private readonly perms: PermissionsService,
     private readonly events: EventEmitter2,
+    private readonly storage: FileStorageService,
   ) {}
 
   /** Перевірка, що відгук на заклад взагалі можна створити:
@@ -50,17 +52,32 @@ export class ReviewsService {
       throw new ConflictException('Ви вже залишили відгук на цей заклад');
   }
 
+  /** Створення з побічним ефектом збереження фото чека: перевірки
+   *  assertCanCreate виконуються один раз ПЕРЕД збереженням файла, а при
+   *  падінні вставки (гонка дубліката) щойно збережений файл прибирається. */
   async create(
     userId: string,
     venueId: string,
     dto: CreateReviewDto,
+    file?: Express.Multer.File,
   ): Promise<Review> {
     await this.assertCanCreate(userId, venueId);
+    let stored: { url: string; filename: string } | undefined;
+    let checkPhotoUrl: string | null = null;
+    if (file) {
+      stored = await this.storage.save(`reviews/${venueId}`, {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        buffer: file.buffer,
+      });
+      checkPhotoUrl = stored.url;
+    }
     const review = this.reviews.create({
       venueId,
       userId,
       ...dto,
-      checkPhotoUrl: dto.checkPhotoUrl ?? null,
+      checkPhotoUrl,
       billAmount: dto.billAmount ?? null,
     });
     try {
@@ -74,6 +91,12 @@ export class ReviewsService {
       this.events.emit(REVIEW_CREATED, { reviewId: saved.id, venueId });
       return saved;
     } catch (e) {
+      // Файл чека не має лишатися сиротою, якщо вставка не відбулася.
+      if (stored) {
+        await this.storage
+          .remove(`reviews/${venueId}`, stored.filename)
+          .catch(() => undefined);
+      }
       // Паралельний create двох відгуків з однієї пари (venueId, userId)
       // проскакує перевірку assertCanCreate — юнік-індекс ловить гонку.
       if (
@@ -109,6 +132,9 @@ export class ReviewsService {
     return review;
   }
 
+  /** Мʼяке видалення: відгук лишається у базі з проставленим deletedAt
+   *  (частковий унік-індекс пускає автору написати новий на той самий заклад),
+   *  рейтинг перераховується без видаленого відгуку. */
   async softDelete(userId: string, reviewId: string): Promise<void> {
     const review = await this.findOneOrThrow(reviewId);
     await this.perms.assertOwnerOrPermission(
@@ -119,7 +145,7 @@ export class ReviewsService {
     );
     const venueId = review.venueId;
     await this.reviews.manager.transaction(async (em) => {
-      await em.delete(Review, reviewId);
+      await em.softDelete(Review, reviewId);
       await this.recalc(venueId, em);
     });
     await this.venuesService.invalidateCatalogCache();
@@ -156,6 +182,7 @@ export class ReviewsService {
       .leftJoinAndSelect('r.user', 'u')
       .leftJoinAndSelect('u.profile', 'p')
       .where('r.venueId = :venueId', { venueId })
+      .andWhere('r.deletedAt IS NULL')
       .orderBy('r.isFeatured', 'DESC')
       .addOrderBy(`r.${order.column}`, order.dir)
       .skip(offset)
@@ -184,6 +211,8 @@ export class ReviewsService {
       .leftJoinAndSelect('r.venue', 'v');
     if (opts.venueId)
       qb.where('r.venueId = :venueId', { venueId: opts.venueId });
+    // Видалені відгуки не показуємо ніде, включно з адміністративним списком.
+    qb.andWhere('r.deletedAt IS NULL');
     qb.orderBy('r.createdAt', 'DESC').skip(offset).take(limit);
     const [data, total] = await qb.getManyAndCount();
     return {
@@ -213,6 +242,7 @@ export class ReviewsService {
       .select('AVG(r.rating)', 'avg')
       .addSelect('COUNT(r.id)', 'count')
       .where('r.venueId = :venueId', { venueId })
+      .andWhere('r.deletedAt IS NULL')
       .getRawOne<{ avg: string; count: string }>();
     // Поля закладу мутуємо тільки через venues.service — агрегат має
     // одного власника, прямий апдейт репозиторію оминав би його.
