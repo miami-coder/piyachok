@@ -116,6 +116,7 @@ describe('NewsService', () => {
       venueId: 'v1',
       status: NewsStatus.Published,
     });
+    venues.findOneOrThrow.mockResolvedValueOnce({ ownerId: 'u2' });
     perms.hasPermission.mockResolvedValueOnce(true);
     const r = await service.softDelete('n1', 'u1');
     expect(r.status).toBe(NewsStatus.Archived);
@@ -276,7 +277,7 @@ describe('NewsService.listPublic — фільтр схованого закла�
     service = module.get(NewsService);
   });
 
-  it('список: схований заклад відфільтрований — EXISTS-фільтр БЕЗ leftJoin (News не має venue-релішена!)', async () => {
+  it('список: схований заклад відфільтрований — фільтр через venue-релішен у leftJoin', async () => {
     const chain = {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
@@ -289,10 +290,12 @@ describe('NewsService.listPublic — фільтр схованого закла�
     };
     news.createQueryBuilder.mockReturnValueOnce(chain);
     await service.listPublic({ venueId: 'v-pending' });
+    // фільтр статусу закладу йде через релішен, а не EXISTS-підзапит
+    expect(chain.leftJoin).toHaveBeenCalledWith('n.venue', 'v');
     const andWhereCalls = chain.andWhere.mock.calls.map((c) => c[0]);
-    expect(andWhereCalls.some((sql) => sql.includes('EXISTS'))).toBe(true);
-    // leftJoin('n.venue') валить рантайм (релішена нема) — і не викликається
-    expect(chain.leftJoin).not.toHaveBeenCalled();
+    expect(
+      andWhereCalls.some((sql) => sql.includes('v.status = :approved')),
+    ).toBe(true);
   });
 
   it('список: глобальні новини (venueId NULL) лишаються видимими — IS NULL у фільтрі', async () => {

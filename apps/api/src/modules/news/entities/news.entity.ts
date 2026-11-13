@@ -3,9 +3,12 @@ import {
   CreateDateColumn,
   Entity,
   Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Venue } from '../../venues/entities/venue.entity';
 
 export enum NewsCategory {
   General = 'general',
@@ -39,4 +42,8 @@ export class News {
   @Column({ type: 'timestamptz', nullable: true }) publishedAt: Date | null;
   @CreateDateColumn() createdAt: Date;
   @UpdateDateColumn() updatedAt: Date;
+
+  @ManyToOne(() => Venue, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'venueId' })
+  venue: Venue | null;
 }

@@ -37,7 +37,7 @@ export class NewsService {
   }
 
   // Глобальні новини створюються лише через адмін-роут (news:manage:any) —
-  // гвард вже пропустив адміна, тому isPromoted тут правомірний.
+  // гвард вже пропустив адміна, тому canPromoteFromCaller тут правомірний.
   async createGlobal(dto: CreateNewsDto) {
     return this.save(dto, null, undefined, true);
   }
@@ -46,12 +46,11 @@ export class NewsService {
     dto: CreateNewsDto,
     venueId: string | null,
     userId?: string,
-    canPromote = false,
+    canPromoteFromCaller = false,
   ) {
-    if (!canPromote) {
-      canPromote =
-        !!userId && (await this.perms.hasPermission(userId, 'news:manage:any'));
-    }
+    const canPromote =
+      canPromoteFromCaller ||
+      (!!userId && (await this.perms.hasPermission(userId, 'news:manage:any')));
     const now = new Date();
     const entity = this.news.create({
       venueId,
@@ -77,16 +76,12 @@ export class NewsService {
     const { page, limit, offset } = normalizePagination(opts);
     const qb = this.news
       .createQueryBuilder('n')
+      .leftJoin('n.venue', 'v')
       .where('n.status = :status', { status: NewsStatus.Published });
     // Новини схованого (pending/archived) закладу публічно не видимі.
-    // News не має venue-релішена (тільки колонка venueId) — leftJoin тут
-    // валиться в рантайм (500 на /news); тож фільтр через EXISTS.
-    qb.andWhere(
-      '(n.venueId IS NULL OR EXISTS (SELECT 1 FROM venues v WHERE v.id = n.venueId AND v.status = :approved))',
-      {
-        approved: VenueStatus.Approved,
-      },
-    );
+    qb.andWhere('(n.venueId IS NULL OR v.status = :approved)', {
+      approved: VenueStatus.Approved,
+    });
     if (opts.category)
       qb.andWhere('n.category = :category', { category: opts.category });
     if (opts.venueId)
@@ -180,10 +175,14 @@ export class NewsService {
     await this.assertCanManage(userId, n);
     // Юзер без news:manage:any не може міняти «просунутий» прапор:
     // ключ просто не застосовується (і не знімає існуючий прапор).
-    if (!(await this.perms.hasPermission(userId, 'news:manage:any'))) {
-      delete dto.isPromoted;
+    const { isPromoted: promotedPatch, ...rest } = dto;
+    Object.assign(n, rest);
+    if (
+      promotedPatch !== undefined &&
+      (await this.perms.hasPermission(userId, 'news:manage:any'))
+    ) {
+      n.isPromoted = promotedPatch;
     }
-    Object.assign(n, dto);
     return this.news.save(n);
   }
 
@@ -219,12 +218,9 @@ export class NewsService {
    * лише news:manage:any.
    */
   private async assertCanManage(userId: string, news: News) {
-    if (await this.perms.hasPermission(userId, 'news:manage:any')) return;
     if (!news.venueId)
       throw new ForbiddenException('Немає дозволу news:manage:any');
     const venue = await this.venues.findOneOrThrow(news.venueId);
-    // право вже перевірено вище — тут вирішує только володіння закладом;
-    // повторний виклик hasPermission у хелпері б'є в кеш пермішенів
     await this.perms.assertOwnerOrPermission(
       venue.ownerId,
       userId,
