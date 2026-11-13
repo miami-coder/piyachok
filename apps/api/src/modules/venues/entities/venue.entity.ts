@@ -9,6 +9,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { NumericTransformer } from '../../../common/utils/numeric-transformer';
 import { User } from '../../users/entities/user.entity';
 import { VenuePhoto } from './venue-photo.entity';
 import { VenueFeatureAssignment } from './venue-feature-assignment.entity';
@@ -49,9 +50,21 @@ export class Venue {
   @Column({ type: 'varchar', length: 200 }) name: string;
   @Column({ type: 'text', nullable: true }) description: string | null;
   @Column({ type: 'text' }) address: string;
-  @Column({ type: 'decimal', precision: 9, scale: 6, nullable: true })
+  @Column({
+    type: 'decimal',
+    precision: 9,
+    scale: 6,
+    nullable: true,
+    transformer: NumericTransformer,
+  })
   latitude: number | null;
-  @Column({ type: 'decimal', precision: 9, scale: 6, nullable: true })
+  @Column({
+    type: 'decimal',
+    precision: 9,
+    scale: 6,
+    nullable: true,
+    transformer: NumericTransformer,
+  })
   longitude: number | null;
   @Column({ type: 'jsonb', default: {} }) contacts: {
     phone?: string;
@@ -60,12 +73,24 @@ export class Venue {
     website?: string;
   };
   @Column({ type: 'jsonb', default: {} }) workingHours: Record<string, string>;
-  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  @Column({
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    transformer: NumericTransformer,
+  })
   averageCheck: number | null;
   @Column({ type: 'text', nullable: true }) mainPhotoUrl: string | null;
   @Column({ type: 'varchar', length: 16, default: VenueStatus.Pending })
   status: VenueStatus;
-  @Column({ type: 'numeric', precision: 3, scale: 2, default: 0 })
+  @Column({
+    type: 'numeric',
+    precision: 3,
+    scale: 2,
+    default: 0,
+    transformer: NumericTransformer,
+  })
   ratingAvg: number;
   @Column({ type: 'integer', default: 0 }) ratingCount: number;
   @Column({ type: 'integer', default: 0 }) viewCount: number;

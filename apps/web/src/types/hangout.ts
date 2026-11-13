@@ -21,7 +21,7 @@ export interface RawHangout {
   gender: HangoutGender
   groupSize: number
   payer: HangoutPayer
-  desiredBudget: string | null // числова колонка прибуває рядком
+  desiredBudget: string | number | null // числова колонка: бекенд перетворює на число, страховку лишаємо
   status: HangoutStatus
   venue?: { id: string; name: string; address: string; mainPhotoUrl: string | null }
   participants?: { hangoutId: string; userId: string; joinedAt: string; firstname: string; lastname: string }[]

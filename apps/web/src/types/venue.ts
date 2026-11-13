@@ -7,14 +7,16 @@ export interface RawVenue {
   name: string
   description: string | null
   address: string
-  latitude: string | null
-  longitude: string | null
+  // Числові колонки numeric/decimal: бекенд перетворює на числа через
+  // transformer, але в raw-тип лишаємо string | number як страховку.
+  latitude: string | number | null
+  longitude: string | number | null
   contacts: { phone?: string; instagram?: string; facebook?: string; website?: string }
   workingHours: Record<string, string>
-  averageCheck: string | null
+  averageCheck: string | number | null
   mainPhotoUrl: string | null
   status: 'pending' | 'approved' | 'rejected' | 'archived'
-  ratingAvg: string | null
+  ratingAvg: string | number | null
   ratingCount: number
   viewCount: number
   // Рекомендація критика (1 критик на заклад): рекомендований — userId, ні — null.

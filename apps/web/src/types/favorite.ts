@@ -3,7 +3,7 @@ export interface RawFavoriteVenue {
   id: string
   name: string
   address: string
-  ratingAvg: string | null
+  ratingAvg: string | number | null
   mainPhotoUrl: string | null
 }
 

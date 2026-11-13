@@ -8,6 +8,7 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { NumericTransformer } from '../../../common/utils/numeric-transformer';
 import { Venue } from '../../venues/entities/venue.entity';
 import { User } from '../../users/entities/user.entity';
 import { HangoutParticipant } from './hangout-participant.entity';
@@ -53,7 +54,13 @@ export class Hangout {
     default: HangoutPayer.Split,
   })
   payer: HangoutPayer;
-  @Column({ type: 'numeric', precision: 10, scale: 2, nullable: true })
+  @Column({
+    type: 'numeric',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    transformer: NumericTransformer,
+  })
   desiredBudget: number | null;
   @Column({
     type: 'varchar',
