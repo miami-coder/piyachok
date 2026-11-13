@@ -40,9 +40,13 @@ export function configureApp(
   if (staticUploads) {
     // Роздача завантажених файлів: /static/* з uploads (локальний дисковий режим;
     // у blob-режимі на проді файли роздаються напряму з Vercel Blob).
+    // Порожній UPLOADS_DIR («=» без значення) трактується як «не задано» —
+    // на відміну від ??, який пропускає '' як валідне значення.
     app.use(
       '/static',
-      express.static(process.env.UPLOADS_DIR ?? join(process.cwd(), 'uploads')),
+      express.static(
+        process.env.UPLOADS_DIR || join(process.cwd(), 'uploads'),
+      ),
     );
   }
 
