@@ -33,6 +33,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { VenuesService } from './venues.service';
+import { VenueTaxonomyService } from './venues-taxonomy.service';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
 import { QueryVenuesDto } from './dto/query-venues.dto';
@@ -45,7 +46,10 @@ import {
 @ApiTags('Venues')
 @Controller('venues')
 export class VenuesController {
-  constructor(private readonly venues: VenuesService) {}
+  constructor(
+    private readonly venues: VenuesService,
+    private readonly taxonomy: VenueTaxonomyService,
+  ) {}
 
   @Public()
   @Get()
@@ -82,20 +86,20 @@ export class VenuesController {
     },
   })
   listTags() {
-    return this.venues.listTags().then((data) => ({ data }));
+    return this.taxonomy.listTags().then((data) => ({ data }));
   }
   @Public()
   @Get('types')
   @ApiOperation({ summary: 'Довідник типів закладів (для select-фільтра)' })
   listTypes() {
-    return this.venues.listTypes().then((data) => ({ data }));
+    return this.taxonomy.listTypes().then((data) => ({ data }));
   }
 
   @Public()
   @Get('features')
   @ApiOperation({ summary: 'Довідник особливостей (для чип-фільтра)' })
   listFeatures() {
-    return this.venues.listFeatures().then((data) => ({ data }));
+    return this.taxonomy.listFeatures().then((data) => ({ data }));
   }
 
   @Public()

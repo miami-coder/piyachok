@@ -9,16 +9,11 @@ import { Brackets, In, Repository } from 'typeorm';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Venue, VenueStatus } from './entities/venue.entity';
 import { VenuePhoto } from './entities/venue-photo.entity';
-import { VenueFeature } from './entities/venue-feature.entity';
-import { VenueFeatureAssignment } from './entities/venue-feature-assignment.entity';
-import { Tag } from './entities/tag.entity';
-import { VenueTag } from './entities/venue-tag.entity';
-import { VenueType } from './entities/venue-type.entity';
-import { VenueTypeAssignment } from './entities/venue-type-assignment.entity';
 import { CreateVenueDto } from './dto/create-venue.dto';
 import { UpdateVenueDto } from './dto/update-venue.dto';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
 import { QueryVenuesDto, VenueSort } from './dto/query-venues.dto';
+import { VenueTaxonomyService } from './venues-taxonomy.service';
 import { PermissionsService } from '../rbac/permissions.service';
 import { RoleGrantsService } from '../rbac/role-grants.service';
 import { RoleCode } from '../rbac/entities/role.enum';
@@ -64,17 +59,7 @@ export class VenuesService {
     @InjectRepository(Venue) private readonly venues: Repository<Venue>,
     @InjectRepository(VenuePhoto)
     private readonly photos: Repository<VenuePhoto>,
-    @InjectRepository(VenueFeature)
-    private readonly features: Repository<VenueFeature>,
-    @InjectRepository(VenueFeatureAssignment)
-    private readonly featureAssignments: Repository<VenueFeatureAssignment>,
-    @InjectRepository(Tag) private readonly tags: Repository<Tag>,
-    @InjectRepository(VenueTag)
-    private readonly venueTags: Repository<VenueTag>,
-    @InjectRepository(VenueType)
-    private readonly venueTypes: Repository<VenueType>,
-    @InjectRepository(VenueTypeAssignment)
-    private readonly venueTypeAssignments: Repository<VenueTypeAssignment>,
+    private readonly taxonomy: VenueTaxonomyService,
     private readonly perms: PermissionsService,
     private readonly roleGrants: RoleGrantsService,
     private readonly audit: AuditService,
@@ -82,38 +67,6 @@ export class VenuesService {
     private readonly events: EventEmitter2,
     private readonly storage: FileStorageService,
   ) {}
-
-  /** Довідник типів закладів (для select-фільтра каталогу). */
-  listTypes(): Promise<VenueType[]> {
-    return this.venueTypes.find({ order: { name: 'ASC' } });
-  }
-
-  /** Довідник особливостей (для чип-фільтра каталогу). */
-  listFeatures(): Promise<VenueFeature[]> {
-    return this.features.find({ order: { name: 'ASC' } });
-  }
-
-  /** Довідник тегів: тег + кількість закладів, де він використаний. */
-  async listTags(): Promise<
-    { id: string; name: string; slug: string; venueCount: number }[]
-  > {
-    return this.tags
-      .createQueryBuilder('t')
-      .select('t.id', 'id')
-      .addSelect('t.name', 'name')
-      .addSelect('t.slug', 'slug')
-      .addSelect('COUNT(vt."venueId")::int', 'venueCount')
-      .leftJoin(VenueTag, 'vt', 'vt."tagId" = t."id"')
-      .groupBy('t.id')
-      .orderBy('venueCount', 'DESC')
-      .addOrderBy('t.name', 'ASC')
-      .getRawMany<{
-        id: string;
-        name: string;
-        slug: string;
-        venueCount: number;
-      }>();
-  }
 
   async create(ownerId: string, dto: CreateVenueDto): Promise<Venue> {
     // Супер-адмін (venue:moderate) створює заклад одразу схваленим
@@ -136,14 +89,14 @@ export class VenuesService {
     // Фічі/теги/тип валідуємо ДО збереження: невідомий код/слаг — 400, щоб
     // не лишати напівстворений заклад без прив'язок.
     const [features, tags, type] = await Promise.all([
-      this.resolveFeatures(dto.featureCodes ?? []),
-      this.resolveTags(dto.tagSlugs ?? []),
-      this.resolveType(dto.typeSlug),
+      this.taxonomy.resolveFeatures(dto.featureCodes ?? []),
+      this.taxonomy.resolveTags(dto.tagSlugs ?? []),
+      this.taxonomy.resolveType(dto.typeSlug),
     ]);
     await this.venues.save(venue);
-    await this.writeFeatures(venue.id, features);
-    await this.writeTags(venue.id, tags);
-    await this.writeType(venue.id, type);
+    await this.taxonomy.writeFeatures(venue.id, features);
+    await this.taxonomy.writeTags(venue.id, tags);
+    await this.taxonomy.writeType(venue.id, type);
     this.events.emit(VENUE_CREATED, new VenueCreatedEvent(venue.id));
     return venue;
   }
@@ -181,84 +134,23 @@ export class VenuesService {
     // Валідація до запису: 400 не залишає заклад із знятими прив'язками.
     const features =
       'featureCodes' in dto
-        ? await this.resolveFeatures(dto.featureCodes ?? [])
+        ? await this.taxonomy.resolveFeatures(dto.featureCodes ?? [])
         : undefined;
     const tags =
       'tagSlugs' in dto
-        ? await this.resolveTags(dto.tagSlugs ?? [])
+        ? await this.taxonomy.resolveTags(dto.tagSlugs ?? [])
         : undefined;
     const type =
-      'typeSlug' in dto ? await this.resolveType(dto.typeSlug) : undefined;
-    if (features) await this.writeFeatures(venue.id, features);
-    if (tags) await this.writeTags(venue.id, tags);
-    if (type !== undefined) await this.writeType(venue.id, type);
+      'typeSlug' in dto
+        ? await this.taxonomy.resolveType(dto.typeSlug)
+        : undefined;
+    if (features) await this.taxonomy.writeFeatures(venue.id, features);
+    if (tags) await this.taxonomy.writeTags(venue.id, tags);
+    if (type !== undefined) await this.taxonomy.writeType(venue.id, type);
 
     await this.venues.save(venue);
     this.events.emit(VENUE_UPDATED, new VenueUpdatedEvent(venue.id));
     return venue;
-  }
-
-  /** Валідація наборів до запису: невідомий код/слаг — 400. */
-  private async resolveFeatures(codes: string[]): Promise<VenueFeature[]> {
-    const unique = [...new Set(codes)];
-    const features = unique.length
-      ? await this.features.find({ where: { code: In(unique) } })
-      : [];
-    const unknown = unique.filter((c) => !features.some((f) => f.code === c));
-    if (unknown.length)
-      throw new BadRequestException(
-        `Невідомі особливості: ${unknown.join(', ')}`,
-      );
-    return features;
-  }
-
-  private async resolveTags(slugs: string[]): Promise<Tag[]> {
-    const unique = [...new Set(slugs)];
-    const tags = unique.length
-      ? await this.tags.find({ where: { slug: In(unique) } })
-      : [];
-    const unknown = unique.filter((s) => !tags.some((t) => t.slug === s));
-    if (unknown.length)
-      throw new BadRequestException(`Невідомі теги: ${unknown.join(', ')}`);
-    return tags;
-  }
-
-  /** Порожній/null-slug = зняти тип (null); невідомий слаг — 400. */
-  private async resolveType(
-    typeSlug?: string | null,
-  ): Promise<VenueType | null> {
-    const slug = typeSlug?.trim();
-    if (!slug) return null;
-    const type = await this.venueTypes.findOne({ where: { slug } });
-    if (!type)
-      throw new BadRequestException(`Невідомий тип закладу: «${slug}»`);
-    return type;
-  }
-
-  private async writeFeatures(
-    venueId: string,
-    features: VenueFeature[],
-  ): Promise<void> {
-    await this.featureAssignments.delete({ venueId });
-    if (features.length)
-      await this.featureAssignments.save(
-        features.map((f) => ({ venueId, featureId: f.id })),
-      );
-  }
-
-  private async writeTags(venueId: string, tags: Tag[]): Promise<void> {
-    await this.venueTags.delete({ venueId });
-    if (tags.length)
-      await this.venueTags.save(tags.map((t) => ({ venueId, tagId: t.id })));
-  }
-
-  private async writeType(
-    venueId: string,
-    type: VenueType | null,
-  ): Promise<void> {
-    await this.venueTypeAssignments.delete({ venueId });
-    if (type)
-      await this.venueTypeAssignments.save({ venueId, typeId: type.id });
   }
 
   /** Об'єкт без порожніх ключів: строкові значення трімуємо, пусті/null

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { VenuesService } from './venues.service';
+import { VenueTaxonomyService } from './venues-taxonomy.service';
 import { Venue, VenueStatus } from './entities/venue.entity';
 import { VenuePhoto } from './entities/venue-photo.entity';
 import { VenueFeature } from './entities/venue-feature.entity';
@@ -35,6 +36,18 @@ function qb() {
     take: jest.fn().mockReturnThis(),
     getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
     getOne: jest.fn(),
+  };
+}
+
+/** Мок таксономії для спеків, де набірні поля в тестах не беруть участь. */
+function taxonomyMock() {
+  return {
+    resolveFeatures: jest.fn().mockResolvedValue([]),
+    resolveTags: jest.fn().mockResolvedValue([]),
+    resolveType: jest.fn().mockResolvedValue(null),
+    writeFeatures: jest.fn().mockResolvedValue(undefined),
+    writeTags: jest.fn().mockResolvedValue(undefined),
+    writeType: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -83,6 +96,7 @@ describe('VenuesService', () => {
     const module = await Test.createTestingModule({
       providers: [
         VenuesService,
+        VenueTaxonomyService,
         { provide: getRepositoryToken(Venue), useValue: venues },
         {
           provide: getRepositoryToken(VenuePhoto),
@@ -782,6 +796,7 @@ describe('VenuesService.findOnePublic — санітизація власник�
           provide: getRepositoryToken(VenueTypeAssignment),
           useValue: { save: jest.fn(), delete: jest.fn() },
         },
+        { provide: VenueTaxonomyService, useValue: taxonomyMock() },
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
         { provide: FileStorageService, useValue: storage },
@@ -894,6 +909,7 @@ describe('VenuesService.search — кеш-хіт повторної сторін
           provide: getRepositoryToken(VenueTypeAssignment),
           useValue: { save: jest.fn(), delete: jest.fn() },
         },
+        { provide: VenueTaxonomyService, useValue: taxonomyMock() },
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
         { provide: FileStorageService, useValue: storage },
@@ -970,6 +986,7 @@ describe('VenuesService — модерація закладів', () => {
           provide: getRepositoryToken(VenueTypeAssignment),
           useValue: { save: jest.fn(), delete: jest.fn() },
         },
+        { provide: VenueTaxonomyService, useValue: taxonomyMock() },
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
         { provide: FileStorageService, useValue: storage },
@@ -1036,6 +1053,7 @@ describe('VenuesService.search — %/_ літерали, не wildcard', () => {
           provide: getRepositoryToken(VenueTypeAssignment),
           useValue: { save: jest.fn(), delete: jest.fn() },
         },
+        { provide: VenueTaxonomyService, useValue: taxonomyMock() },
         { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
         { provide: FileStorageService, useValue: { save: jest.fn() } },
@@ -1077,57 +1095,3 @@ describe('VenuesService.search — %/_ літерали, не wildcard', () => {
   });
 });
 
-describe('VenuesService — довідники типів і фіч (для select-фільтрів)', () => {
-  it('listTypes → [{id, name, slug}], listFeatures → [{id, name, code, icon}]', async () => {
-    const typesMock = {
-      find: jest
-        .fn()
-        .mockResolvedValue([{ id: 't1', name: 'Бар', slug: 'bar' }]),
-    };
-    const featuresMock = {
-      find: jest
-        .fn()
-        .mockResolvedValue([
-          { id: 'f1', name: 'Wi-Fi', code: 'wifi', icon: '📶' },
-        ]),
-    };
-    const module = await Test.createTestingModule({
-      providers: [
-        VenuesService,
-        { provide: getRepositoryToken(Venue), useValue: {} },
-        { provide: getRepositoryToken(VenuePhoto), useValue: {} },
-        { provide: getRepositoryToken(VenueFeature), useValue: featuresMock },
-        {
-          provide: getRepositoryToken(VenueFeatureAssignment),
-          useValue: { save: jest.fn(), delete: jest.fn() },
-        },
-        { provide: getRepositoryToken(Tag), useValue: { find: jest.fn() } },
-        {
-          provide: getRepositoryToken(VenueTag),
-          useValue: { save: jest.fn(), delete: jest.fn() },
-        },
-        { provide: getRepositoryToken(VenueType), useValue: typesMock },
-        {
-          provide: getRepositoryToken(VenueTypeAssignment),
-          useValue: { save: jest.fn(), delete: jest.fn() },
-        },
-        { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
-        { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
-        { provide: FileStorageService, useValue: { save: jest.fn() } },
-        {
-          provide: RoleGrantsService,
-          useValue: { grant: jest.fn().mockResolvedValue(false) },
-        },
-        { provide: AuditService, useValue: {} },
-        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
-      ],
-    }).compile();
-    const service = module.get(VenuesService);
-    expect(await service.listTypes()).toEqual([
-      { id: 't1', name: 'Бар', slug: 'bar' },
-    ]);
-    expect(await service.listFeatures()).toEqual([
-      { id: 'f1', name: 'Wi-Fi', code: 'wifi', icon: '📶' },
-    ]);
-  });
-});

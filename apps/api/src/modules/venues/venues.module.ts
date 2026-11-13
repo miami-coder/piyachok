@@ -9,6 +9,7 @@ import { VenueTag } from './entities/venue-tag.entity';
 import { VenueType } from './entities/venue-type.entity';
 import { VenueTypeAssignment } from './entities/venue-type-assignment.entity';
 import { VenuesService } from './venues.service';
+import { VenueTaxonomyService } from './venues-taxonomy.service';
 import { RbacModule } from '../rbac/rbac.module';
 import { UsersModule } from '../users/users.module';
 import { AdminModule } from '../admin/admin.module';
@@ -34,7 +35,7 @@ import { MeVenuesController } from './me-venues.controller';
     AdminModule,
   ],
   controllers: [VenuesController, VenuesAdminController, MeVenuesController],
-  providers: [VenuesService, VenueCacheListener],
-  exports: [VenuesService, TypeOrmModule],
+  providers: [VenuesService, VenueTaxonomyService, VenueCacheListener],
+  exports: [VenuesService, VenueTaxonomyService, TypeOrmModule],
 })
 export class VenuesModule {}

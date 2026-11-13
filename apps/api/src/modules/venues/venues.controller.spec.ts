@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { PermissionsService } from '../rbac/permissions.service';
 import { VenuesController } from './venues.controller';
 import { VenuesService } from './venues.service';
+import { VenueTaxonomyService } from './venues-taxonomy.service';
 import { FileStorageService } from '../../common/services/file-storage.service';
 
 describe('VenuesController', () => {
@@ -28,6 +29,14 @@ describe('VenuesController', () => {
           useValue: { hasAnyPermission: jest.fn().mockResolvedValue(true) },
         },
         { provide: VenuesService, useValue: venues },
+        {
+          provide: VenueTaxonomyService,
+          useValue: {
+            listTypes: jest.fn().mockResolvedValue([]),
+            listFeatures: jest.fn().mockResolvedValue([]),
+            listTags: jest.fn().mockResolvedValue([]),
+          },
+        },
         { provide: FileStorageService, useValue: storage },
       ],
     }).compile();
