@@ -95,3 +95,49 @@ describe('AllExceptionsFilter — невалідний UUID', () => {
     );
   });
 });
+
+describe('AllExceptionsFilter — фолбек PG-кодів', () => {
+  let filter: AllExceptionsFilter;
+  let host: ArgumentsHost;
+  let statusMock: jest.Mock;
+  let json: jest.Mock;
+
+  beforeEach(() => {
+    filter = new AllExceptionsFilter();
+    statusMock = jest.fn();
+    json = jest.fn();
+    statusMock.mockReturnValue({ json });
+    host = {
+      switchToHttp: () => ({
+        getResponse: () => ({ status: statusMock }),
+        getRequest: () => ({ method: 'GET', url: '/x' }),
+      }),
+    } as ArgumentsHost;
+  });
+
+  const pgErrorWith = (code: string): Error => {
+    const err = new Error(`pg ${code}`) as Error & { code?: string };
+    err.code = code;
+    return err;
+  };
+
+  it('необроблена гонка 23505 уникає як 409 з загальним меседжем, не 500', () => {
+    filter.catch(pgErrorWith('23505'), host);
+    expect(statusMock).toHaveBeenCalledWith(409);
+    expect(json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.objectContaining({
+          code: 'CONFLICT',
+          message: 'Конфлікт даних, спробуйте ще раз',
+        }),
+      }),
+    );
+  });
+
+  it('інший PG-код (23503) — 500, у фолбеку його немає', () => {
+    filter.catch(pgErrorWith('23503'), host);
+    expect(statusMock).toHaveBeenCalledWith(500);
+    const call = statusMock.mock.results[0].value.json.mock.calls[0][0];
+    expect(call.error.code).toBe('INTERNAL_ERROR');
+  });
+});

@@ -19,6 +19,7 @@ import {
   normalizePagination,
 } from '../../common/utils/pagination.util';
 import { sanitizeUser } from '../../common/utils/sanitize-user';
+import { PG_CODES, isPgError } from '../../common/utils/pg-error.util';
 
 /** Жодних приватних даних авторів у відповідях. */
 function sanitizeReviewAuthors(data: Review[]) {
@@ -99,11 +100,7 @@ export class ReviewsService {
       }
       // Паралельний create двох відгуків з однієї пари (venueId, userId)
       // проскакує перевірку assertCanCreate — юнік-індекс ловить гонку.
-      if (
-        typeof e === 'object' &&
-        e !== null &&
-        (e as { code?: string }).code === '23505'
-      ) {
+      if (isPgError(e, PG_CODES.UNIQUE_VIOLATION)) {
         throw new ConflictException('Ви вже залишили відгук на цей заклад');
       }
       throw e;

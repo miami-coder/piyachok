@@ -25,6 +25,7 @@ import {
   buildMeta,
   normalizePagination,
 } from '../../common/utils/pagination.util';
+import { PG_CODES, isPgError } from '../../common/utils/pg-error.util';
 
 export const HANGOUT_FILLED = 'hangout.filled';
 export const HANGOUT_CANCELLED = 'hangout.cancelled';
@@ -118,11 +119,7 @@ export class HangoutsService {
       await this.invalidateListCache();
       return h;
     } catch (e) {
-      if (
-        typeof e === 'object' &&
-        e !== null &&
-        (e as { code?: string }).code === '23505'
-      ) {
+      if (isPgError(e, PG_CODES.UNIQUE_VIOLATION)) {
         throw new ConflictException('Ви вже приєднані');
       }
       throw e;

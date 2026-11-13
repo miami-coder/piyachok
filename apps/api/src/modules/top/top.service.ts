@@ -9,6 +9,7 @@ import { In, Repository } from 'typeorm';
 import { TopCategory } from './top-category.entity';
 import { TopEntry } from './top-entry.entity';
 import { VenueStatus } from '../venues/entities/venue.entity';
+import { PG_CODES, isPgError } from '../../common/utils/pg-error.util';
 import { VenuesService } from '../venues/venues.service';
 
 export interface CreateTopCategoryDto {
@@ -140,7 +141,7 @@ export class TopService {
     } catch (e) {
       // Гонка дублікатів: service-level findOne пропускає обидва паралельні
       // запити, UNIQUE(categoryId, venueId) ріже другий — 409, не 500.
-      if ((e as { code?: string }).code === '23505') {
+      if (isPgError(e, PG_CODES.UNIQUE_VIOLATION)) {
         throw new ConflictException('Заклад уже в цій категорії Топу');
       }
       throw e;

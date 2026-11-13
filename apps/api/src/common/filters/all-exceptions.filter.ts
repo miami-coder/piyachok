@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { PG_CODES, isPgError } from '../utils/pg-error.util';
 
 interface ErrorResponse {
   error: {
@@ -43,12 +44,9 @@ export class AllExceptionsFilter implements ExceptionFilter {
       }
       code = this.codeFromStatus(status);
     } else if (exception instanceof Error) {
-      // Невалідний UUID у URL/запиті — не помилка сервера:
-      // PG повертає 22P02, віддаємо 400 замість 500.
-      if ((exception as { code?: string }).code === '22P02') {
-        status = HttpStatus.BAD_REQUEST;
-        code = 'BAD_REQUEST';
-        message = 'Некоректний ідентифікатор';
+      const pg = this.fromPgError(exception);
+      if (pg) {
+        ({ status, code, message } = pg);
       } else {
         this.logger.error(exception.message, exception.stack);
       }
@@ -64,6 +62,32 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const body: ErrorResponse = { error: { code, message, details } };
     response.status(status).json(body);
+  }
+
+  /** Структурована обробка помилок Postgres: код → HTTP. Це фолбек —
+   *  якщо серверний код сам не перевірив/не обробив код, віддаємо чесний
+   *  4xx замість 500. Специфічні меседжі для юзера кидаються в сервісах,
+   *  тут — загальні. */
+  private fromPgError(
+    exception: Error,
+  ): { status: number; code: string; message: string } | null {
+    if (isPgError(exception, PG_CODES.INVALID_TEXT_REPRESENTATION)) {
+      // Невалідний UUID/число у запиті — не помилка сервера
+      return {
+        status: HttpStatus.BAD_REQUEST,
+        code: 'BAD_REQUEST',
+        message: 'Некоректний ідентифікатор',
+      };
+    }
+    if (isPgError(exception, PG_CODES.UNIQUE_VIOLATION)) {
+      // Гонка дублікатів, яку сервіс не обгорнув у ConflictException
+      return {
+        status: HttpStatus.CONFLICT,
+        code: 'CONFLICT',
+        message: 'Конфлікт даних, спробуйте ще раз',
+      };
+    }
+    return null;
   }
 
   private codeFromStatus(status: number): string {
