@@ -1,6 +1,10 @@
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { VenuesService } from './venues.service';
 import { Venue, VenueStatus } from './entities/venue.entity';
@@ -46,6 +50,12 @@ describe('VenuesService', () => {
   let roles: any;
   let userRoles: any;
   let audit: any;
+  let featuresRepo: any;
+  let tagsRepo: any;
+  let featureAssignmentsRepo: any;
+  let venueTagsRepo: any;
+  let venueTypesRepo: any;
+  let venueTypeAssignmentsRepo: any;
 
   beforeEach(async () => {
     venues = {
@@ -56,6 +66,12 @@ describe('VenuesService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(qb()),
     };
     photos = { save: jest.fn(), insert: jest.fn(), count: jest.fn() };
+    featuresRepo = { find: jest.fn().mockResolvedValue([]) };
+    featureAssignmentsRepo = { save: jest.fn(), delete: jest.fn() };
+    tagsRepo = { find: jest.fn().mockResolvedValue([]) };
+    venueTagsRepo = { save: jest.fn(), delete: jest.fn() };
+    venueTypesRepo = { findOne: jest.fn() };
+    venueTypeAssignmentsRepo = { save: jest.fn(), delete: jest.fn() };
     perms = { hasPermission: jest.fn(), invalidate: jest.fn() };
     roles = { findOne: jest.fn() };
     userRoles = { findOne: jest.fn(), save: jest.fn() };
@@ -77,24 +93,24 @@ describe('VenuesService', () => {
         },
         {
           provide: getRepositoryToken(VenueFeature),
-          useValue: { find: jest.fn() },
+          useValue: featuresRepo,
         },
         {
           provide: getRepositoryToken(VenueFeatureAssignment),
-          useValue: { save: jest.fn() },
+          useValue: featureAssignmentsRepo,
         },
-        { provide: getRepositoryToken(Tag), useValue: { find: jest.fn() } },
+        { provide: getRepositoryToken(Tag), useValue: tagsRepo },
         {
           provide: getRepositoryToken(VenueTag),
-          useValue: { save: jest.fn() },
+          useValue: venueTagsRepo,
         },
         {
           provide: getRepositoryToken(VenueType),
-          useValue: { findOne: jest.fn() },
+          useValue: venueTypesRepo,
         },
         {
           provide: getRepositoryToken(VenueTypeAssignment),
-          useValue: { save: jest.fn() },
+          useValue: venueTypeAssignmentsRepo,
         },
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
@@ -151,6 +167,159 @@ describe('VenuesService', () => {
     perms.hasPermission.mockResolvedValueOnce(true);
     await service.update('admin', 'v1', { name: 'X' });
     expect(venues.save).toHaveBeenCalled();
+  });
+
+  describe('update/create — очист й заміна опційних полів', () => {
+    const venueDraft = (): any => ({
+      id: 'v1',
+      ownerId: 'u1',
+      status: VenueStatus.Approved,
+      name: 'Стара назва',
+      description: 'Старий опис',
+      latitude: 50.45,
+      longitude: 30.52,
+      contacts: { phone: '+380671234567' },
+      workingHours: { monday: '10:00-22:00' },
+      averageCheck: 250,
+    });
+
+    function draft() {
+      const venue = venueDraft();
+      venues.findOne.mockResolvedValueOnce(venue);
+      perms.hasPermission.mockResolvedValueOnce(true);
+      return venue;
+    }
+
+    it('очищення: явний null і порожній рядок пишуть null, відсутній ключ не чіпає', async () => {
+      const venue = draft();
+      await service.update('u1', 'v1', { description: null } as any);
+      expect(venue.description).toBeNull();
+      expect(venue.latitude).toBe(50.45);
+      expect(venue.averageCheck).toBe(250);
+
+      const venue2 = draft();
+      await service.update('u1', 'v1', {
+        description: '   ',
+        latitude: null,
+        averageCheck: null,
+      } as any);
+      expect(venue2.description).toBeNull();
+      expect(venue2.latitude).toBeNull();
+      expect(venue2.averageCheck).toBeNull();
+    });
+
+    it('contacts/workingHours: ключ присутній → заміна обʼєкта, порожні ключі видаляються', async () => {
+      const venue = draft();
+      await service.update('u1', 'v1', {
+        contacts: { phone: null, instagram: ' http://ig ' },
+      } as any);
+      expect(venue.contacts).toEqual({ instagram: 'http://ig' });
+
+      const venue2 = draft();
+      await service.update('u1', 'v1', {
+        workingHours: { monday: '09:00-18:00', tuesday: '' },
+      } as any);
+      expect(venue2.workingHours).toEqual({ monday: '09:00-18:00' });
+    });
+
+    it('featureCodes: заміна набору — delete старих привʼязок + save нових', async () => {
+      const venue = draft();
+      featuresRepo.find.mockResolvedValue([
+        { id: 'f1', code: 'wifi' },
+        { id: 'f2', code: 'terrace' },
+      ]);
+      await service.update('u1', 'v1', {
+        featureCodes: ['wifi', 'terrace'],
+      } as any);
+      expect(featureAssignmentsRepo.delete).toHaveBeenCalledWith({
+        venueId: 'v1',
+      });
+      expect(featureAssignmentsRepo.save).toHaveBeenCalledWith([
+        { venueId: 'v1', featureId: 'f1' },
+        { venueId: 'v1', featureId: 'f2' },
+      ]);
+      expect(venue.name).toBe('Стара назва');
+    });
+
+    it('featureCodes: порожній масив знімає всі привʼязки, невідомий код — 400', async () => {
+      draft();
+      await service.update('u1', 'v1', { featureCodes: [] } as any);
+      expect(featureAssignmentsRepo.delete).toHaveBeenCalledWith({
+        venueId: 'v1',
+      });
+      expect(featureAssignmentsRepo.save).not.toHaveBeenCalled();
+
+      draft();
+      featureAssignmentsRepo.delete.mockClear();
+      await expect(
+        service.update('u1', 'v1', { featureCodes: ['bogus'] } as any),
+      ).rejects.toThrow(BadRequestException);
+      expect(featureAssignmentsRepo.delete).not.toHaveBeenCalled();
+    });
+
+    it('tagSlugs: заміна набору, невідомий слаг — 400', async () => {
+      draft();
+      tagsRepo.find.mockResolvedValue([{ id: 't1', slug: 'kraft' }]);
+      await service.update('u1', 'v1', { tagSlugs: ['kraft'] } as any);
+      expect(venueTagsRepo.delete).toHaveBeenCalledWith({ venueId: 'v1' });
+      expect(venueTagsRepo.save).toHaveBeenCalledWith([
+        { venueId: 'v1', tagId: 't1' },
+      ]);
+
+      draft();
+      tagsRepo.find.mockResolvedValue([{ id: 't1', slug: 'kraft' }]);
+      await expect(
+        service.update('u1', 'v1', { tagSlugs: ['bogus'] } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('typeSlug: заміна типу, порожній рядок/null знімає тип, невідомий — 400', async () => {
+      draft();
+      venueTypesRepo.findOne.mockResolvedValue({ id: 'ty1', slug: 'bar' });
+      await service.update('u1', 'v1', { typeSlug: 'bar' } as any);
+      expect(venueTypeAssignmentsRepo.delete).toHaveBeenCalledWith({
+        venueId: 'v1',
+      });
+      expect(venueTypeAssignmentsRepo.save).toHaveBeenCalledWith({
+        venueId: 'v1',
+        typeId: 'ty1',
+      });
+
+      draft();
+      await service.update('u1', 'v1', { typeSlug: null } as any);
+      expect(venueTypeAssignmentsRepo.delete).toHaveBeenCalledWith({
+        venueId: 'v1',
+      });
+      expect(venueTypeAssignmentsRepo.save).toHaveBeenCalledTimes(1); // лише з першого кроку
+
+      draft();
+      venueTypesRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.update('u1', 'v1', { typeSlug: 'bogus' } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('create з невідомим typeSlug/tagSlug/featureCode — 400 (раніше мовчки ігнорувалось)', async () => {
+      venueTypesRepo.findOne.mockResolvedValue(null);
+      await expect(
+        service.create('u1', { name: 'X', address: 'Y', typeSlug: 'bogus' }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.create('u1', {
+          name: 'X',
+          address: 'Y',
+          tagSlugs: ['bogus'],
+        }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.create('u1', {
+          name: 'X',
+          address: 'Y',
+          featureCodes: ['nope'],
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(venues.save).not.toHaveBeenCalled();
+    });
   });
 
   it('softDelete архівує заклад власника', async () => {
@@ -552,11 +721,20 @@ describe('VenuesService.findOnePublic — санітизація власник�
         { provide: getRepositoryToken(Venue), useValue: venues },
         { provide: getRepositoryToken(VenuePhoto), useValue: photos },
         { provide: getRepositoryToken(VenueFeature), useValue: {} },
-        { provide: getRepositoryToken(VenueFeatureAssignment), useValue: {} },
-        { provide: getRepositoryToken(Tag), useValue: {} },
-        { provide: getRepositoryToken(VenueTag), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueFeatureAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
+        { provide: getRepositoryToken(Tag), useValue: { find: jest.fn() } },
+        {
+          provide: getRepositoryToken(VenueTag),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: getRepositoryToken(VenueType), useValue: {} },
-        { provide: getRepositoryToken(VenueTypeAssignment), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueTypeAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
         { provide: FileStorageService, useValue: storage },
@@ -658,11 +836,20 @@ describe('VenuesService.search — кеш-хіт повторної сторін
         { provide: getRepositoryToken(Venue), useValue: venues },
         { provide: getRepositoryToken(VenuePhoto), useValue: {} },
         { provide: getRepositoryToken(VenueFeature), useValue: {} },
-        { provide: getRepositoryToken(VenueFeatureAssignment), useValue: {} },
-        { provide: getRepositoryToken(Tag), useValue: {} },
-        { provide: getRepositoryToken(VenueTag), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueFeatureAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
+        { provide: getRepositoryToken(Tag), useValue: { find: jest.fn() } },
+        {
+          provide: getRepositoryToken(VenueTag),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: getRepositoryToken(VenueType), useValue: {} },
-        { provide: getRepositoryToken(VenueTypeAssignment), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueTypeAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
         { provide: FileStorageService, useValue: storage },
@@ -728,11 +915,20 @@ describe('VenuesService — модерація закладів', () => {
         { provide: getRepositoryToken(Venue), useValue: venues },
         { provide: getRepositoryToken(VenuePhoto), useValue: {} },
         { provide: getRepositoryToken(VenueFeature), useValue: {} },
-        { provide: getRepositoryToken(VenueFeatureAssignment), useValue: {} },
-        { provide: getRepositoryToken(Tag), useValue: {} },
-        { provide: getRepositoryToken(VenueTag), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueFeatureAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
+        { provide: getRepositoryToken(Tag), useValue: { find: jest.fn() } },
+        {
+          provide: getRepositoryToken(VenueTag),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: getRepositoryToken(VenueType), useValue: {} },
-        { provide: getRepositoryToken(VenueTypeAssignment), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueTypeAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: PermissionsService, useValue: perms },
         { provide: CacheService, useValue: cache },
         { provide: FileStorageService, useValue: storage },
@@ -786,11 +982,20 @@ describe('VenuesService.search — %/_ літерали, не wildcard', () => {
         { provide: getRepositoryToken(Venue), useValue: venues },
         { provide: getRepositoryToken(VenuePhoto), useValue: {} },
         { provide: getRepositoryToken(VenueFeature), useValue: {} },
-        { provide: getRepositoryToken(VenueFeatureAssignment), useValue: {} },
-        { provide: getRepositoryToken(Tag), useValue: {} },
-        { provide: getRepositoryToken(VenueTag), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueFeatureAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
+        { provide: getRepositoryToken(Tag), useValue: { find: jest.fn() } },
+        {
+          provide: getRepositoryToken(VenueTag),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: getRepositoryToken(VenueType), useValue: {} },
-        { provide: getRepositoryToken(VenueTypeAssignment), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueTypeAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
         { provide: FileStorageService, useValue: { save: jest.fn() } },
@@ -850,11 +1055,20 @@ describe('VenuesService — довідники типів і фіч (для sele
         { provide: getRepositoryToken(Venue), useValue: {} },
         { provide: getRepositoryToken(VenuePhoto), useValue: {} },
         { provide: getRepositoryToken(VenueFeature), useValue: featuresMock },
-        { provide: getRepositoryToken(VenueFeatureAssignment), useValue: {} },
-        { provide: getRepositoryToken(Tag), useValue: {} },
-        { provide: getRepositoryToken(VenueTag), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueFeatureAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
+        { provide: getRepositoryToken(Tag), useValue: { find: jest.fn() } },
+        {
+          provide: getRepositoryToken(VenueTag),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: getRepositoryToken(VenueType), useValue: typesMock },
-        { provide: getRepositoryToken(VenueTypeAssignment), useValue: {} },
+        {
+          provide: getRepositoryToken(VenueTypeAssignment),
+          useValue: { save: jest.fn(), delete: jest.fn() },
+        },
         { provide: PermissionsService, useValue: { hasPermission: jest.fn() } },
         { provide: CacheService, useValue: { get: jest.fn(), set: jest.fn() } },
         { provide: FileStorageService, useValue: { save: jest.fn() } },

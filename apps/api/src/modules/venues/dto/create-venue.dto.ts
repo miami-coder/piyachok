@@ -22,25 +22,27 @@ export class ContactsDto {
 
 export class CreateVenueDto {
   @IsString() @MinLength(3) name: string;
-  @IsOptional() @IsString() description?: string;
+  // null у опційних полях PATCH — «очистити», тому типи допускають null
+  // (@IsOptional() пропускає null без валідації; сервіс нормалізує порожнє).
+  @IsOptional() @IsString() description?: string | null;
   @IsString() @MinLength(5) address: string;
-  @IsOptional() @IsLatitude() @Type(() => Number) latitude?: number;
-  @IsOptional() @IsLongitude() @Type(() => Number) longitude?: number;
+  @IsOptional() @IsLatitude() @Type(() => Number) latitude?: number | null;
+  @IsOptional() @IsLongitude() @Type(() => Number) longitude?: number | null;
   @IsOptional()
   @ValidateNested()
   @Type(() => ContactsDto)
-  contacts?: ContactsDto;
-  @IsOptional() @IsObject() workingHours?: Record<string, string>;
-  @IsOptional() @IsNumber() @Min(0) averageCheck?: number;
+  contacts?: ContactsDto | null;
+  @IsOptional() @IsObject() workingHours?: Record<string, string> | null;
+  @IsOptional() @IsNumber() @Min(0) averageCheck?: number | null;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
   @IsString({ each: true })
-  featureCodes?: string[];
+  featureCodes?: string[] | null;
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
   @IsString({ each: true })
-  tagSlugs?: string[];
-  @IsOptional() @IsString() typeSlug?: string;
+  tagSlugs?: string[] | null;
+  @IsOptional() @IsString() typeSlug?: string | null;
 }

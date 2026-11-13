@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -129,31 +130,17 @@ export class VenuesService {
       averageCheck: dto.averageCheck ?? null,
       status: autoApprove ? VenueStatus.Approved : VenueStatus.Pending,
     });
+    // Фічі/теги/тип валідуємо ДО збереження: невідомий код/слаг — 400, щоб
+    // не лишати напівстворений заклад без прив'язок.
+    const [features, tags, type] = await Promise.all([
+      this.resolveFeatures(dto.featureCodes ?? []),
+      this.resolveTags(dto.tagSlugs ?? []),
+      this.resolveType(dto.typeSlug),
+    ]);
     await this.venues.save(venue);
-    if (dto.featureCodes?.length) {
-      const features = await this.features.find({
-        where: { code: In(dto.featureCodes) },
-      });
-      await this.featureAssignments.save(
-        features.map((f) => ({ venueId: venue.id, featureId: f.id })),
-      );
-    }
-    if (dto.tagSlugs?.length) {
-      const tags = await this.tags.find({ where: { slug: In(dto.tagSlugs) } });
-      await this.venueTags.save(
-        tags.map((t) => ({ venueId: venue.id, tagId: t.id })),
-      );
-    }
-    if (dto.typeSlug) {
-      const type = await this.venueTypes.findOne({
-        where: { slug: dto.typeSlug },
-      });
-      if (type)
-        await this.venueTypeAssignments.save({
-          venueId: venue.id,
-          typeId: type.id,
-        });
-    }
+    await this.writeFeatures(venue.id, features);
+    await this.writeTags(venue.id, tags);
+    await this.writeType(venue.id, type);
     this.events.emit(VENUE_CREATED, new VenueCreatedEvent(venue.id));
     return venue;
   }
@@ -165,19 +152,125 @@ export class VenuesService {
   ): Promise<Venue> {
     const venue = await this.findOneOrThrow(venueId);
     await this.assertCanEdit(userId, venue);
-    Object.assign(venue, {
-      name: dto.name ?? venue.name,
-      description: dto.description ?? venue.description,
-      address: dto.address ?? venue.address,
-      latitude: dto.latitude ?? venue.latitude,
-      longitude: dto.longitude ?? venue.longitude,
-      contacts: dto.contacts ?? venue.contacts,
-      workingHours: dto.workingHours ?? venue.workingHours,
-      averageCheck: dto.averageCheck ?? venue.averageCheck,
-    });
+
+    // Обов'язкові поля: відсутнє/null не міняє старе (очищати не можна).
+    venue.name = dto.name ?? venue.name;
+    venue.address = dto.address ?? venue.address;
+
+    // Опційні поля: «ключ присутній у запиті» = записати нове значення, при
+    // цьому явний null (або порожній рядок після тріму) записує NULL у базу;
+    // відсутній ключ = поле не чіпаємо. Відмінність null-від-відсутності —
+    // єдиний спосіб очистити опційне поле через PATCH.
+    if ('description' in dto) {
+      const d = dto.description?.trim();
+      venue.description = d ? d : null;
+    }
+    if ('latitude' in dto) venue.latitude = dto.latitude ?? null;
+    if ('longitude' in dto) venue.longitude = dto.longitude ?? null;
+    if ('contacts' in dto)
+      venue.contacts = this.pickNonEmpty(dto.contacts ?? {});
+    if ('workingHours' in dto)
+      venue.workingHours = this.pickNonEmpty(dto.workingHours ?? {});
+    if ('averageCheck' in dto) venue.averageCheck = dto.averageCheck ?? null;
+
+    // Набірні поля: ключ присутній — замінюємо набір повністю (порожній
+    // масив/порожній рядок/null = очистити), невідомі коди/слаги — 400.
+    // Валідація до запису: 400 не залишає заклад із знятими прив'язками.
+    const features =
+      'featureCodes' in dto
+        ? await this.resolveFeatures(dto.featureCodes ?? [])
+        : undefined;
+    const tags =
+      'tagSlugs' in dto
+        ? await this.resolveTags(dto.tagSlugs ?? [])
+        : undefined;
+    const type =
+      'typeSlug' in dto ? await this.resolveType(dto.typeSlug) : undefined;
+    if (features) await this.writeFeatures(venue.id, features);
+    if (tags) await this.writeTags(venue.id, tags);
+    if (type !== undefined) await this.writeType(venue.id, type);
+
     await this.venues.save(venue);
     this.events.emit(VENUE_UPDATED, new VenueUpdatedEvent(venue.id));
     return venue;
+  }
+
+  /** Валідація наборів до запису: невідомий код/слаг — 400. */
+  private async resolveFeatures(codes: string[]): Promise<VenueFeature[]> {
+    const unique = [...new Set(codes)];
+    const features = unique.length
+      ? await this.features.find({ where: { code: In(unique) } })
+      : [];
+    const unknown = unique.filter((c) => !features.some((f) => f.code === c));
+    if (unknown.length)
+      throw new BadRequestException(
+        `Невідомі особливості: ${unknown.join(', ')}`,
+      );
+    return features;
+  }
+
+  private async resolveTags(slugs: string[]): Promise<Tag[]> {
+    const unique = [...new Set(slugs)];
+    const tags = unique.length
+      ? await this.tags.find({ where: { slug: In(unique) } })
+      : [];
+    const unknown = unique.filter((s) => !tags.some((t) => t.slug === s));
+    if (unknown.length)
+      throw new BadRequestException(`Невідомі теги: ${unknown.join(', ')}`);
+    return tags;
+  }
+
+  /** Порожній/null-slug = зняти тип (null); невідомий слаг — 400. */
+  private async resolveType(
+    typeSlug?: string | null,
+  ): Promise<VenueType | null> {
+    const slug = typeSlug?.trim();
+    if (!slug) return null;
+    const type = await this.venueTypes.findOne({ where: { slug } });
+    if (!type)
+      throw new BadRequestException(`Невідомий тип закладу: «${slug}»`);
+    return type;
+  }
+
+  private async writeFeatures(
+    venueId: string,
+    features: VenueFeature[],
+  ): Promise<void> {
+    await this.featureAssignments.delete({ venueId });
+    if (features.length)
+      await this.featureAssignments.save(
+        features.map((f) => ({ venueId, featureId: f.id })),
+      );
+  }
+
+  private async writeTags(venueId: string, tags: Tag[]): Promise<void> {
+    await this.venueTags.delete({ venueId });
+    if (tags.length)
+      await this.venueTags.save(tags.map((t) => ({ venueId, tagId: t.id })));
+  }
+
+  private async writeType(
+    venueId: string,
+    type: VenueType | null,
+  ): Promise<void> {
+    await this.venueTypeAssignments.delete({ venueId });
+    if (type)
+      await this.venueTypeAssignments.save({ venueId, typeId: type.id });
+  }
+
+  /** Об'єкт без порожніх ключів: строкові значення трімуємо, пусті/null
+   *  видаляємо (очищення конкретного контакту або дня тижня через PATCH). */
+  private pickNonEmpty<T extends object>(obj: T): T {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === 'string') {
+        const s = v.trim();
+        if (s) out[k] = s;
+      } else if (v !== null && v !== undefined) {
+        out[k] = v;
+      }
+    }
+    return out as T;
   }
 
   /** Призначити власника (існування користувача перевіряє контролер через

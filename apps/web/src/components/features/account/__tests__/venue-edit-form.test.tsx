@@ -61,16 +61,17 @@ describe('VenueEditForm', () => {
     refresh.mockClear()
   })
 
-  it('префіл: поля містять name/address/phone/години з venue', () => {
+  it('префіл: поля містять name/address/phone/години/фічі/теги/тип з venue', () => {
     stubFetch(okPatch())
     renderForm(<VenueEditForm venue={venue} />)
     expect(screen.getByLabelText(/^Назва$/i)).toHaveValue('Бар «Пиво»')
     expect(screen.getByLabelText(/^Адреса$/i)).toHaveValue('вул. Липова, 1')
     expect(screen.getByLabelText('Телефон')).toHaveValue('+380671234567')
     expect(screen.getByLabelText('Години: Понеділок')).toHaveValue('10:00-22:00')
-    // фічі/теги/тип — чипи read-only, полів введення немає
-    expect(screen.queryByLabelText(/Фічі/i)).not.toBeInTheDocument()
-    expect(screen.getByText('Крафтова веранда')).toBeInTheDocument()
+    // фічі/теги/тип — тепер редаговані CSV-поля з поточними значеннями
+    expect(screen.getByLabelText(/Фічі \(через кому/i)).toHaveValue('terrace')
+    expect(screen.getByLabelText(/Теги \(через кому/i)).toHaveValue('kraft')
+    expect(screen.getByLabelText(/Тип \(slug\)/i)).toHaveValue('bar')
   })
 
   it('сабміт → PATCH /venues/{id} лише зі зміненим name → toast + refresh', async () => {
@@ -131,6 +132,60 @@ describe('VenueEditForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
     await waitFor(() => expect(refresh).toHaveBeenCalled())
     const body = JSON.parse((apiCalls()[0][1] as RequestInit).body as string)
-    expect(body.contacts).toEqual({ phone: '+380991112233', instagram: 'https://instagram.com/pyvo' })
+    expect(body.contacts).toEqual({
+      phone: '+380991112233',
+      instagram: 'https://instagram.com/pyvo',
+      facebook: null,
+      website: null,
+    })
+  })
+
+  it('очищення опису → PATCH з явним description: null (бекенд пише NULL)', async () => {
+    stubFetch(okPatch())
+    renderForm(<VenueEditForm venue={venue} />)
+    fireEvent.change(screen.getByLabelText(/Опис/), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    const body = JSON.parse((apiCalls()[0][1] as RequestInit).body as string)
+    expect(body).toEqual({ description: null })
+  })
+
+  it('очищення контакту → PATCH надсилає null по ключу, решта не втрачається', async () => {
+    stubFetch(okPatch())
+    renderForm(<VenueEditForm venue={venue} />)
+    fireEvent.change(screen.getByLabelText('Instagram'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    const body = JSON.parse((apiCalls()[0][1] as RequestInit).body as string)
+    expect(body.contacts).toEqual({
+      phone: '+380671234567',
+      instagram: null,
+      facebook: null,
+      website: null,
+    })
+  })
+
+  it('зміна фіч/тегів/типу → PATCH надсилає повні набори (featureCodes/tagSlugs/typeSlug)', async () => {
+    stubFetch(okPatch())
+    renderForm(<VenueEditForm venue={venue} />)
+    fireEvent.change(screen.getByLabelText(/Фічі \(через кому/i), { target: { value: 'terrace, wifi' } })
+    fireEvent.change(screen.getByLabelText(/Теги \(через кому/i), { target: { value: 'kraft, бар' } })
+    fireEvent.change(screen.getByLabelText(/Тип \(slug\)/i), { target: { value: 'restaurant' } })
+    fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    const body = JSON.parse((apiCalls()[0][1] as RequestInit).body as string)
+    expect(body.featureCodes).toEqual(['terrace', 'wifi'])
+    expect(body.tagSlugs).toEqual(['kraft', 'бар'])
+    expect(body.typeSlug).toBe('restaurant')
+  })
+
+  it('очищення типу (порожнє поле) → PATCH з typeSlug: null, незмінені набори не надсилаються', async () => {
+    stubFetch(okPatch())
+    renderForm(<VenueEditForm venue={venue} />)
+    fireEvent.change(screen.getByLabelText(/Тип \(slug\)/i), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    const body = JSON.parse((apiCalls()[0][1] as RequestInit).body as string)
+    expect(body).toEqual({ typeSlug: null })
   })
 })

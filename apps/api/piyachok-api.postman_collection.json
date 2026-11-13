@@ -762,10 +762,10 @@
                 "venues"
               ]
             },
-            "description": "",
+            "description": "Невідомі typeSlug/featureCode тепер дають 400; tagSlugs не шлемо — теги сіє лише seed:demo, у міграціях їх немає.",
             "body": {
               "mode": "raw",
-              "raw": "{\"name\": \"Демо-бар Постмана\", \"description\": \"Тестовий заклад, створений обхідним прогоном Postman.\", \"address\": \"м. Київ, вул. Демо, 1\", \"latitude\": 50.4501, \"longitude\": 30.5234, \"averageCheck\": 350, \"typeSlug\": \"bar\", \"featureCodes\": [\"wifi\", \"parking\"], \"tagSlugs\": [\"beer\", \"food\"], \"workingHours\": {\"monday\": \"18:00-03:00\"}, \"contacts\": {\"phone\": \"+380671234567\", \"website\": \"https://example.com\"}}",
+              "raw": "{\"name\": \"Демо-бар Постмана\", \"description\": \"Тестовий заклад, створений обхідним прогоном Postman.\", \"address\": \"м. Київ, вул. Демо, 1\", \"latitude\": 50.4501, \"longitude\": 30.5234, \"averageCheck\": 350, \"typeSlug\": \"bar\", \"featureCodes\": [\"wifi\", \"parking\"], \"workingHours\": {\"monday\": \"18:00-03:00\"}, \"contacts\": {\"phone\": \"+380671234567\", \"website\": \"https://example.com\"}}",
               "options": {
                 "raw": {
                   "language": "json"
