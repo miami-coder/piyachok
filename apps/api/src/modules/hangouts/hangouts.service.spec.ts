@@ -15,17 +15,28 @@ import { CacheService } from '../../common/services/cache.service';
 describe('HangoutsService', () => {
   let service: HangoutsService;
   let hangouts: any;
+  let em: any;
   let participants: any;
   let venues: any;
   let cache: any;
   let events: any;
 
   beforeEach(async () => {
+    // join тепер іде через manager.transaction з FOR UPDATE:
+    // em — об'єкт, яким transaction викликає колбек
+    em = {
+      findOne: jest.fn(),
+      count: jest.fn().mockResolvedValue(0),
+      save: jest.fn().mockImplementation((x) => Promise.resolve(x)),
+    };
     hangouts = {
       create: jest.fn((x) => x),
       save: jest.fn().mockImplementation((x) => Promise.resolve(x)),
       findOne: jest.fn(),
       find: jest.fn().mockResolvedValue([]),
+      manager: {
+        transaction: jest.fn((cb) => cb(em)),
+      },
       createQueryBuilder: jest.fn().mockReturnValue({
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         leftJoin: jest.fn().mockReturnThis(),
@@ -96,7 +107,7 @@ describe('HangoutsService', () => {
   });
 
   it('join throws 409 when status is not open', async () => {
-    hangouts.findOne.mockResolvedValueOnce({
+    em.findOne.mockResolvedValueOnce({
       id: 'h1',
       status: HangoutStatus.Filled,
       groupSize: 2,
@@ -105,20 +116,112 @@ describe('HangoutsService', () => {
   });
 
   it('join fills hangout and emits event', async () => {
-    hangouts.findOne.mockResolvedValueOnce({
+    em.findOne.mockResolvedValueOnce({
       id: 'h1',
       status: HangoutStatus.Open,
       groupSize: 2,
     });
-    participants.findOne.mockResolvedValueOnce(null);
-    participants.count.mockResolvedValueOnce(1);
+    em.findOne.mockResolvedValueOnce(null); // existing participant
+    em.count.mockResolvedValueOnce(1);
     await service.join('u2', 'h1');
-    expect(participants.save).toHaveBeenCalledWith({
+    expect(em.save).toHaveBeenCalledWith(HangoutParticipant, {
       hangoutId: 'h1',
       userId: 'u2',
     });
-    expect(hangouts.save).toHaveBeenCalled();
-    expect(events.emit).toHaveBeenCalled();
+    expect(em.save).toHaveBeenCalledWith(
+      expect.objectContaining({ status: HangoutStatus.Filled }),
+    );
+    expect(events.emit).toHaveBeenCalledWith('hangout.filled', {
+      hangoutId: 'h1',
+    });
+    expect(cache.delByPattern).toHaveBeenCalledWith('hangouts:list:*');
+  });
+
+  it('join перевищення місць неможливе: count перевіряється в транзакції', async () => {
+    em.findOne.mockResolvedValueOnce({
+      id: 'h1',
+      status: HangoutStatus.Open,
+      groupSize: 2,
+    });
+    em.findOne.mockResolvedValueOnce(null);
+    em.count.mockResolvedValueOnce(2); // місць немає
+    await expect(service.join('u2', 'h1')).rejects.toThrow(
+      new ConflictException('Заявка вже заповнена'),
+    );
+    expect(em.save).not.toHaveBeenCalledWith(HangoutParticipant, {
+      hangoutId: 'h1',
+      userId: 'u2',
+    });
+  });
+
+  it('join з блокуванням рядка заявки (FOR UPDATE у транзакції)', async () => {
+    em.findOne.mockResolvedValueOnce({
+      id: 'h1',
+      status: HangoutStatus.Open,
+      groupSize: 3,
+    });
+    em.findOne.mockResolvedValueOnce(null);
+    em.count.mockResolvedValueOnce(0);
+    await service.join('u2', 'h1');
+    expect(hangouts.manager.transaction).toHaveBeenCalled();
+    expect(em.findOne).toHaveBeenCalledWith(
+      Hangout,
+      expect.objectContaining({
+        where: { id: 'h1' },
+        lock: { mode: 'pessimistic_write' },
+      }),
+    );
+    expect(events.emit).not.toHaveBeenCalled(); // не заповнена — події немає
+  });
+
+  it('join при подвійному вставленні (23505 від PK) → 409 замість 500', async () => {
+    em.findOne.mockResolvedValueOnce({
+      id: 'h1',
+      status: HangoutStatus.Open,
+      groupSize: 3,
+    });
+    em.findOne.mockResolvedValueOnce(null);
+    em.count.mockResolvedValueOnce(0);
+    em.save.mockRejectedValueOnce({ code: '23505', detail: 'duplicate key' });
+    await expect(service.join('u2', 'h1')).rejects.toThrow(
+      new ConflictException('Ви вже приєднані'),
+    );
+  });
+
+  it('leave неучасника → 409 «Ви не учасник цієї зустрічі»', async () => {
+    hangouts.findOne.mockResolvedValueOnce({
+      id: 'h1',
+      creatorId: 'u1',
+      status: HangoutStatus.Open,
+    });
+    participants.delete.mockResolvedValueOnce({ affected: 0 });
+    await expect(service.leave('u2', 'h1')).rejects.toThrow(
+      new ConflictException('Ви не учасник цієї зустрічі'),
+    );
+  });
+
+  it('leave учасника — ок, кеш скидається', async () => {
+    hangouts.findOne.mockResolvedValueOnce({
+      id: 'h1',
+      creatorId: 'u1',
+      status: HangoutStatus.Open,
+    });
+    participants.delete.mockResolvedValueOnce({ affected: 1 });
+    await service.leave('u2', 'h1');
+    expect(cache.delByPattern).toHaveBeenCalledWith('hangouts:list:*');
+  });
+
+  it('cancel повторного скасування → 409, без збереження і без події', async () => {
+    hangouts.findOne.mockResolvedValueOnce({
+      id: 'h1',
+      creatorId: 'u1',
+      status: HangoutStatus.Cancelled,
+    });
+    await expect(service.cancel('u1', 'h1')).rejects.toThrow(
+      new ConflictException('Заявка вже скасована'),
+    );
+    expect(hangouts.save).not.toHaveBeenCalled();
+    expect(events.emit).not.toHaveBeenCalled();
   });
 
   it('leave blocks creator when others present', async () => {

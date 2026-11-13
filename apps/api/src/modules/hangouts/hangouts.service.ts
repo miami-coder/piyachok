@@ -84,28 +84,54 @@ export class HangoutsService {
     return h;
   }
 
+  /** Гонка на останнє місце: без транзакції два паралельні join-и
+   *  проходили перевірку count до вставки один одного і переповнювали
+   *  заявку. FOR UPDATE на рядок заявки серіалізує join-и однієї заявки.
+   *  PK (hangoutId, userId) — тиловий захист від подвійного join: 23505 → 409. */
   async join(userId: string, hangoutId: string): Promise<Hangout> {
-    const h = await this.findOneOrThrow(hangoutId);
-    if (h.status !== HangoutStatus.Open) {
-      throw new ConflictException('Заявка вже заповнена або скасована');
+    let filled = false;
+    try {
+      const h = await this.hangouts.manager.transaction(async (em) => {
+        const hangout = await em.findOne(Hangout, {
+          where: { id: hangoutId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!hangout) throw new NotFoundException('Заявку не знайдено');
+        if (hangout.status !== HangoutStatus.Open) {
+          throw new ConflictException('Заявка вже заповнена або скасована');
+        }
+        const existing = await em.findOne(HangoutParticipant, {
+          where: { hangoutId, userId },
+        });
+        if (existing) throw new ConflictException('Ви вже приєднані');
+        const count = await em.count(HangoutParticipant, {
+          where: { hangoutId },
+        });
+        if (count >= hangout.groupSize) {
+          throw new ConflictException('Заявка вже заповнена');
+        }
+        await em.save(HangoutParticipant, { hangoutId, userId });
+        if (count + 1 >= hangout.groupSize) {
+          hangout.status = HangoutStatus.Filled;
+          await em.save(hangout);
+          filled = true;
+        }
+        return hangout;
+      });
+      // Подія після коміту: слухачі бачать уже зафіксований стан
+      if (filled) this.events.emit(HANGOUT_FILLED, { hangoutId });
+      await this.invalidateListCache();
+      return h;
+    } catch (e) {
+      if (
+        typeof e === 'object' &&
+        e !== null &&
+        (e as { code?: string }).code === '23505'
+      ) {
+        throw new ConflictException('Ви вже приєднані');
+      }
+      throw e;
     }
-    const existing = await this.participants.findOne({
-      where: { hangoutId, userId },
-    });
-    if (existing) throw new ConflictException('Ви вже приєднані');
-    const count = await this.participants.count({ where: { hangoutId } });
-    if (count >= h.groupSize) {
-      throw new ConflictException('Заявка вже заповнена');
-    }
-    await this.participants.save({ hangoutId, userId });
-    const newCount = count + 1;
-    if (newCount >= h.groupSize) {
-      h.status = HangoutStatus.Filled;
-      await this.hangouts.save(h);
-      this.events.emit(HANGOUT_FILLED, { hangoutId });
-    }
-    await this.invalidateListCache();
-    return h;
   }
 
   async leave(userId: string, hangoutId: string): Promise<void> {
@@ -118,7 +144,11 @@ export class HangoutsService {
         );
       }
     }
-    await this.participants.delete({ hangoutId, userId });
+    const result = await this.participants.delete({ hangoutId, userId });
+    // Неучасник (або хто вже вийшов) — явний 409 замість тихого 200
+    if (!result.affected) {
+      throw new ConflictException('Ви не учасник цієї зустрічі');
+    }
     if (h.status === HangoutStatus.Filled) {
       h.status = HangoutStatus.Open;
       await this.hangouts.save(h);
@@ -142,6 +172,10 @@ export class HangoutsService {
     const h = await this.findOneOrThrow(hangoutId);
     if (h.creatorId !== userId) {
       throw new ForbiddenException('Тільки творець може скасувати');
+    }
+    // Повторне скасування: не зберігаємо вдруге і не шлемо подію ще раз
+    if (h.status === HangoutStatus.Cancelled) {
+      throw new ConflictException('Заявка вже скасована');
     }
     h.status = HangoutStatus.Cancelled;
     await this.hangouts.save(h);
