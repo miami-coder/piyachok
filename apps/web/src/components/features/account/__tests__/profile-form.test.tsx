@@ -56,6 +56,39 @@ describe('ProfileForm', () => {
     expect(body.age).toBe(25)
   })
 
+  it('очищене поле не шлється: стерти телефон → PATCH без phone і avatarUrl (avatarUrl null → порожній)', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/auth/me')) {
+        return new Response(JSON.stringify({ data: testUser }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({ data: { ...profile } }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }))
+    renderWithProviders(<ProfileForm profile={profile} />)
+    fireEvent.change(screen.getByLabelText('Телефон'), { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/збережено/i))
+    const body = JSON.parse((apiCalls()[0][1] as RequestInit).body as string)
+    expect(body.phone).toBeUndefined()
+    expect(body.avatarUrl).toBeUndefined()
+    expect(body.firstname).toBe('Іван')
+    expect(body.lastname).toBe('Петренко')
+    expect(body.age).toBe(25)
+  })
+
+  it('avatarUrl заповнений → летить у PATCH', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith('/auth/me')) {
+        return new Response(JSON.stringify({ data: testUser }), { status: 200, headers: { 'content-type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({ data: { ...profile } }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }))
+    renderWithProviders(<ProfileForm profile={{ ...profile, avatarUrl: 'https://cdn/avatar.png' }} />)
+    fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/збережено/i))
+    const body = JSON.parse((apiCalls()[0][1] as RequestInit).body as string)
+    expect(body.avatarUrl).toBe('https://cdn/avatar.png')
+  })
+
   it('firstname <2 → інлайн-помилка, без PATCH', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       if (String(input).endsWith('/auth/me')) {

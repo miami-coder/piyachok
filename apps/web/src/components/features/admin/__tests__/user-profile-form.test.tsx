@@ -90,4 +90,46 @@ describe('UserProfileForm (адмінка)', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Немає доступу'))
     expect(refresh).not.toHaveBeenCalled()
   })
+
+  it('телефон з null → diff лише { phone }', async () => {
+    const fetchMock = vi.fn<FetchFn>(async () => okResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    renderForm()
+    fireEvent.change(screen.getByLabelText('Телефон'), { target: { value: '+380671112233' } })
+    fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Профіль оновлено'))
+    expect(JSON.parse((patchCalls()[0][1] as RequestInit).body as string)).toEqual({
+      phone: '+380671112233',
+    })
+  })
+
+  it('зміна віку → diff лише { age }', async () => {
+    const fetchMock = vi.fn<FetchFn>(async () => okResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    renderForm()
+    fireEvent.change(screen.getByLabelText('Вік'), { target: { value: '30' } })
+    fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Профіль оновлено'))
+    expect(JSON.parse((patchCalls()[0][1] as RequestInit).body as string)).toEqual({ age: 30 })
+  })
+
+  it('подвійний клік під час запиту → PATCH шлеться один раз (in-flight гард)', async () => {
+    const pending: Array<(r: Response) => void> = []
+    const fetchMock = vi.fn<FetchFn>(async () =>
+      new Promise<Response>((resolve) => {
+        pending.push(resolve)
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    renderForm()
+    fireEvent.change(screen.getByLabelText(/^Імʼя$/i), { target: { value: 'Олег' } })
+    fireEvent.click(screen.getByRole('button', { name: /Зберегти/i }))
+    await waitFor(() => expect(patchCalls()).toHaveLength(1))
+    // під час запиту кнопка «Зберігаємо…» — клікаємо по ролі
+    fireEvent.click(screen.getByRole('button'))
+    pending[0](okResponse())
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Профіль оновлено'))
+    expect(patchCalls()).toHaveLength(1)
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
 })
