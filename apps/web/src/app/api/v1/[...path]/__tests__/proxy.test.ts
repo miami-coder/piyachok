@@ -137,9 +137,9 @@ describe('проксі /api/v1', () => {
     expect(fetchMock).toHaveBeenCalledOnce()
   })
 
-  it('передає x-forwarded-for на бекенд (дедуп переглядів по IP)', async () => {
+  it('не пересилає клієнтський x-forwarded-for на бекенд (дедуп переглядів лише за sessionId)', async () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
-      expect((init?.headers as Headers).get('x-forwarded-for')).toBe('198.51.100.7')
+      expect((init?.headers as Headers).get('x-forwarded-for')).toBeNull()
       return jsonRes({ data: { recorded: true } })
     })
     vi.stubGlobal('fetch', fetchMock)

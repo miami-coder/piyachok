@@ -34,11 +34,17 @@ export class AnalyticsService {
     private readonly perms: PermissionsService,
   ) {}
 
+  /**
+   * Дедуп тільки за реальними ідентичностями: userId (логін) або sessionId
+   * (анонімна сесія браузера). IP і заголовки навмисно не читаються: до API
+   * вони доходять без проміжного довіреного проксі, отже будь-який
+   * X-Forwarded-For задається самим клієнтом — «дедуп по IP» обходився
+   * підміною заголовка, тому без userId/sessionId перегляд не записується.
+   */
   async recordView(
     venueId: string,
     userId?: string | null,
     sessionId?: string | null,
-    clientIp?: string | null,
   ): Promise<{ recorded: boolean }> {
     // Перегляд буває тільки на публічній сторінці закладу: він має існувати
     // і бути схваленим — інакше 404 так само, як на публічному читанні
@@ -47,14 +53,11 @@ export class AnalyticsService {
     const venue = await this.venuesService.findOneOrThrow(venueId);
     if (venue.status !== VenueStatus.Approved)
       throw new NotFoundException('Заклад не знайдено');
-    // Дедуп не залежить виключно від клієнта: коли немає ані userId, ані
-    // sessionId, контролер передає клієнтський IP як фолбек-ідентичність.
-    const identity = userId ?? sessionId ?? clientIp;
-    const dedupKey = identity ? `view:dedup:${identity}:${venueId}` : null;
-    if (dedupKey) {
-      const seen = await this.cache.get<string>(dedupKey);
-      if (seen) return { recorded: false };
-    }
+    const identity = userId ?? sessionId;
+    if (!identity) return { recorded: false };
+    const dedupKey = `view:dedup:${identity}:${venueId}`;
+    const seen = await this.cache.get<string>(dedupKey);
+    if (seen) return { recorded: false };
     await this.views.save({
       venueId,
       userId: userId ?? null,
@@ -64,7 +67,7 @@ export class AnalyticsService {
     await this.venues.increment({ id: venueId }, 'viewCount', 1);
     // Ключ дедупу ставимо тільки після успішного запису: якщо збереження
     // впало, ідентичність не спалена на TTL і ретрай можливий
-    if (dedupKey) await this.cache.set(dedupKey, '1', VIEW_DEDUP_TTL);
+    await this.cache.set(dedupKey, '1', VIEW_DEDUP_TTL);
     return { recorded: true };
   }
 

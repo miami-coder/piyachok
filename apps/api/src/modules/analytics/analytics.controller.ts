@@ -5,10 +5,8 @@ import {
   Param,
   Post,
   Query,
-  Req,
   UseGuards,
 } from '@nestjs/common';
-import type { Request } from 'express';
 import {
   AnalyticsRangeQueryDto,
   TimeseriesQueryDto,
@@ -34,19 +32,6 @@ import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { AnalyticsService } from './analytics.service';
 import { RecordViewDto } from './dto/record-view.dto';
 
-/**
- * Клієнтський IP для фолбек-дедупа переглядів: останнє значення
- * X-Forwarded-For дописує найближчий довірений проксі (підміна перших
- * елементів ланцюга на результат не впливає), далі — socket-адреса.
- * Глобальний trust proxy навмисно не вмикається: req.ip, яким керується
- * тротлер, має лишатися адресою проксі, а не клієнта.
- */
-function clientIpOf(req: Request): string | null {
-  const xff = req.headers['x-forwarded-for'];
-  const last = Array.isArray(xff) ? xff[xff.length - 1] : xff?.split(',').pop();
-  return last?.trim() || req.ip || null;
-}
-
 @ApiTags('Analytics')
 @Controller()
 export class AnalyticsController {
@@ -71,11 +56,12 @@ export class AnalyticsController {
   recordView(
     @Param('id', ParseUuidPipe) id: string,
     @Body() dto: RecordViewDto,
-    @Req() req: Request,
   ) {
-    // Дедуп не покладається на клієнта: без sessionId фолбек — IP клієнта
+    // Дедуп тільки за реальними ідентичностями (userId/sessionId) — див.
+    // AnalyticsService.recordView: IP-заголовки клієнт задає сам, тому ними
+    // дедупить не можна. Без sessionId записується recorded: false
     return this.analytics
-      .recordView(id, null, dto.sessionId ?? null, clientIpOf(req))
+      .recordView(id, null, dto.sessionId ?? null)
       .then((data) => ({ data }));
   }
 

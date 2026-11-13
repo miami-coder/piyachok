@@ -14,12 +14,10 @@ async function forward(req: NextRequest, path: string[], accessToken: string | n
   const headers = new Headers()
   const contentType = req.headers.get('content-type')
   if (contentType) headers.set('content-type', contentType)
-  // Передаємо клієнтський IP далі, якщо він прийшов: бекенд дедупить
-  // перегляди по IP, коли клієнт не надіслав sessionId, а req.ip бекенда —
-  // адреса самого проксі (без цього всі клієнти зливалися б в одну
-  // ідентичність).
-  const forwardedFor = req.headers.get('x-forwarded-for')
-  if (forwardedFor) headers.set('x-forwarded-for', forwardedFor)
+  // Клієнтські заголовки типу X-Forwarded-For навмисно НЕ пересилаються:
+  // бекенд дедупить перегляди тільки за реальними ідентичностями
+  // (userId/sessionId), а IP, що пішов би клієнтським заголовком, був би
+  // заданий самим клієнтом — дедуп обходився б його підміною.
   if (accessToken) headers.set('Authorization', `Bearer ${accessToken}`)
 
   try {

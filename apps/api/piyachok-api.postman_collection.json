@@ -2618,7 +2618,12 @@
           "name": "Записати перегляд закладу (з дедуплікацією)",
           "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/venues/{{venueId}}/view",
               "host": [
@@ -2630,7 +2635,16 @@
                 "view"
               ]
             },
-            "description": "Лічильник переглядів, fire-and-forget; на бекенді дедуп 30 хв по (заклад, session або IP) в Redis."
+            "description": "Лічильник переглядів, fire-and-forget; на бекенді дедуп 30 хв по (заклад, sessionId) в Redis. Без userId/sessionId перегляд не записується (recorded: false) — айдентичність клієнтських заголовків типу IP не довіряється.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sessionId\": \"postman-demo-view\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           },
           "response": []
         },
