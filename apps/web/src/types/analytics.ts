@@ -18,6 +18,18 @@ export interface VenueAnalytics {
   eventsByType: { eventType: string; count: number }[]
 }
 
+// --- Адмінська аналітика (admin.server.ts → page.tsx) ---
+export interface TimeseriesPoint {
+  date: string
+  count: number
+}
+
+export interface VenueStat {
+  venueId: string
+  venueName: string | null
+  views: number
+}
+
 const num = (v: string | number): number => Number(v) || 0
 
 export function parseVenueAnalytics(raw: RawVenueAnalytics): VenueAnalytics {

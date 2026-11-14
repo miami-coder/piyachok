@@ -7,8 +7,6 @@ import {
   TimeseriesChart,
   VenueStatsTable,
   type Granularity,
-  type TimeseriesPoint,
-  type VenueStat,
 } from '@/components/features/admin/admin-analytics'
 
 export const revalidate = 0
@@ -46,8 +44,8 @@ export default async function AdminAnalyticsPage({ searchParams }: Props) {
   // serverFetch уже розгортає конверт {data} — повертається одразу масив
   // (venues → {data,meta}, parseData бере data; meta тут не потрібна)
   const [timeseries, venueStats] = await Promise.all([
-    getAnalyticsTimeseries<TimeseriesPoint>(from, to, granularity, tokens),
-    getAnalyticsVenues<VenueStat>(qs, tokens),
+    getAnalyticsTimeseries(from, to, granularity, tokens),
+    getAnalyticsVenues(qs, tokens),
   ])
 
   return (

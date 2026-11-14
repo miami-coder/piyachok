@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { venueListContract } from '@/lib/api/contracts'
 
 vi.mock('@/lib/auth/session', () => ({
   getSessionTokens: vi.fn(async () => ({ accessToken: 'a', refreshToken: 'r' })),
@@ -32,7 +33,11 @@ describe('/account/venues', () => {
     const html = renderToStaticMarkup(await MyVenuesPage())
     expect(html).toContain('На модерації')
     expect(html).toContain('/account/venues/v1')
-    expect(serverFetch).toHaveBeenCalledWith('/me/venues', { tokens: { accessToken: 'a', refreshToken: 'r' }, revalidate: 0 })
+    expect(serverFetch).toHaveBeenCalledWith('/me/venues', {
+      tokens: { accessToken: 'a', refreshToken: 'r' },
+      revalidate: 0,
+      sanity: venueListContract,
+    })
   })
 
   it('порожньо → CTA на /venues/new', async () => {

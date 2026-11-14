@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { formatDate } from '@/lib/utils/format'
+import type { TimeseriesPoint, VenueStat } from '@/types/analytics'
 
 const GRANULARITIES = [
   { value: 'day', label: 'Дні' },
@@ -21,16 +22,9 @@ const GRANULARITIES = [
 
 export type Granularity = (typeof GRANULARITIES)[number]['value']
 
-export interface TimeseriesPoint {
-  date: string
-  count: number
-}
-
-export interface VenueStat {
-  venueId: string
-  venueName: string | null
-  views: number
-}
+// Типи TimeseriesPoint/VenueStat живуть в src/types/analytics.ts разом з
+// іншими аналітичними; тут ре-експорт для сумісності імпортів компонентів
+export type { TimeseriesPoint, VenueStat }
 
 export function AdminAnalyticsControls({ from, to, granularity }: { from: string; to: string; granularity: Granularity }) {
   const router = useRouter()

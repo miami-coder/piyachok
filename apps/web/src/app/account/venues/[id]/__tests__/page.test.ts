@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { venueContract } from '@/lib/api/contracts'
 
 vi.mock('@/lib/auth/session', () => ({
   getSessionTokens: vi.fn(async () => ({ accessToken: 'a', refreshToken: 'r' })),
@@ -99,7 +100,7 @@ describe('/account/venues/[id]', () => {
     expect(html).toContain('href="/account/venues/v1?tab=photos"')
     expect(html).toContain('href="/account/venues/v1?tab=news"')
     expect(html).toContain('href="/account/venues/v1?tab=analytics"')
-    expect(serverFetch).toHaveBeenCalledWith('/me/venues/v1', { tokens, revalidate: 0 })
+    expect(serverFetch).toHaveBeenCalledWith('/me/venues/v1', { tokens, revalidate: 0, sanity: venueContract })
   })
 
   it('?tab=photos → VenuePhotoManager з venue.id і фото замість форми', async () => {

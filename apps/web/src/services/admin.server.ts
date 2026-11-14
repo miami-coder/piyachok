@@ -1,6 +1,8 @@
 import 'server-only'
 
 import { serverFetch, serverFetchList } from '@/lib/api/server-client'
+import { analyticsOverviewContract, timeseriesContract, venueStatsContract } from '@/lib/api/contracts'
+import type { TimeseriesPoint, VenueStat } from '@/types/analytics'
 import type { SessionTokens } from '@/lib/auth/session'
 
 interface RawOverview {
@@ -15,7 +17,11 @@ interface RawOverview {
  */
 export async function getAdminOverview(tokens: SessionTokens | null) {
   const [overview, venues, users, complaints, news] = await Promise.all([
-    serverFetch<RawOverview>('/admin/analytics/overview', { tokens, revalidate: 0 }).catch(() => null),
+    serverFetch<RawOverview>('/admin/analytics/overview', {
+      tokens,
+      revalidate: 0,
+      sanity: analyticsOverviewContract,
+    }).catch(() => null),
     serverFetchList('/admin/venues/pending?limit=1', { tokens, revalidate: 0 }),
     serverFetchList('/admin/users?limit=1', { tokens, revalidate: 0 }),
     serverFetchList('/admin/complaints?limit=1', { tokens, revalidate: 0 }),
@@ -25,14 +31,19 @@ export async function getAdminOverview(tokens: SessionTokens | null) {
 }
 
 /** Таймсерія подій аналітики за період і гранулярністю; null → сторінка показує «—». */
-export function getAnalyticsTimeseries<T>(from: string, to: string, granularity: string, tokens: SessionTokens | null) {
-  return serverFetch<T[]>(`/admin/analytics/timeseries?from=${from}&to=${to}&granularity=${granularity}`, {
+export function getAnalyticsTimeseries(from: string, to: string, granularity: string, tokens: SessionTokens | null) {
+  return serverFetch<TimeseriesPoint[]>(`/admin/analytics/timeseries?from=${from}&to=${to}&granularity=${granularity}`, {
     tokens,
     revalidate: 0,
+    sanity: timeseriesContract,
   }).catch(() => null)
 }
 
 /** Топ закладів за подіями; null → сторінка показує «—». */
-export function getAnalyticsVenues<T>(query: string, tokens: SessionTokens | null) {
-  return serverFetch<T[]>(`/admin/analytics/venues?${query}&limit=50`, { tokens, revalidate: 0 }).catch(() => null)
+export function getAnalyticsVenues(query: string, tokens: SessionTokens | null) {
+  return serverFetch<VenueStat[]>(`/admin/analytics/venues?${query}&limit=50`, {
+    tokens,
+    revalidate: 0,
+    sanity: venueStatsContract,
+  }).catch(() => null)
 }

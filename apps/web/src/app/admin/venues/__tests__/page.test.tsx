@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { venueListContract } from '@/lib/api/contracts'
 
 vi.mock('@/lib/auth/session', () => ({
   getSessionTokens: vi.fn(async () => ({ accessToken: 'a', refreshToken: 'r' })),
@@ -81,6 +82,7 @@ describe('/admin/venues — черга модерації', () => {
     expect(serverFetchList).toHaveBeenCalledWith('/admin/venues/pending?page=1', {
       tokens: { accessToken: 'a', refreshToken: 'r' },
       revalidate: 0,
+      sanity: venueListContract,
     })
     expect(html).toContain('Кнайпа «У Пана»')
     expect(html).toContain('Бар «Двадцять»')
@@ -115,6 +117,7 @@ describe('/admin/venues — черга модерації', () => {
     expect(serverFetchList).toHaveBeenCalledWith('/admin/venues/approved?page=1', {
       tokens: { accessToken: 'a', refreshToken: 'r' },
       revalidate: 0,
+      sanity: venueListContract,
     })
     // схвалені — лінк на публічну сторінку є
     expect(html).toContain('href="/venues/v1"')
@@ -134,6 +137,7 @@ describe('/admin/venues — черга модерації', () => {
     expect(serverFetchList).toHaveBeenCalledWith('/admin/venues/pending?page=1', {
       tokens: { accessToken: 'a', refreshToken: 'r' },
       revalidate: 0,
+      sanity: venueListContract,
     })
   })
 
@@ -186,6 +190,7 @@ describe('/admin/venues — черга модерації', () => {
     expect(serverFetchList).toHaveBeenCalledWith('/admin/venues/pending?page=2', {
       tokens: { accessToken: 'a', refreshToken: 'r' },
       revalidate: 0,
+      sanity: venueListContract,
     })
     expect(html).toContain('/admin/venues?tab=moderation&amp;page=3')
   })
@@ -219,6 +224,7 @@ describe('/admin/venues — черга модерації', () => {
     expect(serverFetchList).toHaveBeenCalledWith('/admin/venues/pending?page=1', {
       tokens: { accessToken: 'a', refreshToken: 'r' },
       revalidate: 0,
+      sanity: venueListContract,
     })
   })
 })

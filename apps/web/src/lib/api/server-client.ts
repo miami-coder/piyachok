@@ -1,5 +1,5 @@
 import 'server-only'
-import { parseData, parseList } from '@/lib/api/parse'
+import { parseData, parseList, type ParseOpts } from '@/lib/api/parse'
 import { BACKEND_URL } from '@/lib/api/backend'
 import type { PaginatedMeta } from '@/types/api'
 import type { SessionTokens } from '@/lib/auth/session'
@@ -23,15 +23,18 @@ export async function backendFetch(path: string, opts: ServerFetchOpts = {}) {
   return fetch(`${BACKEND_URL}/api/v1${path}`, { ...opts.init, headers, ...cacheOpts })
 }
 
-export async function serverFetch<T>(path: string, opts?: ServerFetchOpts): Promise<T> {
+export async function serverFetch<T>(
+  path: string,
+  opts?: ServerFetchOpts & Pick<ParseOpts<T>, 'schema' | 'sanity'>,
+): Promise<T> {
   const res = await backendFetch(path, opts)
-  return parseData<T>(res)
+  return parseData<T>(res, { schema: opts?.schema, sanity: opts?.sanity })
 }
 
 export async function serverFetchList<T>(
   path: string,
-  opts?: ServerFetchOpts,
+  opts?: ServerFetchOpts & Pick<ParseOpts<T[]>, 'schema' | 'sanity'>,
 ): Promise<{ data: T[]; meta?: PaginatedMeta }> {
   const res = await backendFetch(path, opts)
-  return parseList<T>(res)
+  return parseList<T>(res, { schema: opts?.schema, sanity: opts?.sanity })
 }

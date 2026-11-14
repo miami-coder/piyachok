@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { analyticsOverviewContract } from '@/lib/api/contracts'
 
 vi.mock('@/lib/auth/session', () => ({
   getSessionTokens: vi.fn(async () => ({ accessToken: 'a', refreshToken: 'r' })),
@@ -57,6 +58,7 @@ describe('/admin огляд', () => {
     expect(serverFetch).toHaveBeenCalledWith('/admin/analytics/overview', {
       tokens: { accessToken: 'a', refreshToken: 'r' },
       revalidate: 0,
+      sanity: analyticsOverviewContract,
     })
   })
 
