@@ -1,5 +1,6 @@
 import { Logger } from 'nestjs-pino';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -17,12 +18,15 @@ export function configureApp(
   mounts: { staticUploads?: boolean; swagger?: boolean } = {},
 ): void {
   const { staticUploads = true, swagger = true } = mounts;
+  const config = app.get(ConfigService);
 
   app.useLogger(app.get(Logger));
   app.use(helmet());
   app.use(compression());
   app.enableCors({
-    origin: (process.env.FRONTEND_URL ?? 'http://localhost:3001').split(','),
+    origin: (
+      config.get<string>('FRONTEND_URL') ?? 'http://localhost:3001'
+    ).split(','),
     credentials: true,
   });
   app.setGlobalPrefix('api/v1');
@@ -45,12 +49,12 @@ export function configureApp(
     app.use(
       '/static',
       express.static(
-        process.env.UPLOADS_DIR || join(process.cwd(), 'uploads'),
+        config.get<string>('UPLOADS_DIR') || join(process.cwd(), 'uploads'),
       ),
     );
   }
 
-  if (swagger && process.env.NODE_ENV !== 'production') {
+  if (swagger && config.get<string>('NODE_ENV') !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('Piyachok API')
       .setDescription('REST API for the Piyachok venues / hangouts platform')

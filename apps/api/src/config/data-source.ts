@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { config as loadEnv } from 'dotenv';
+import { validateEnv } from './env.validation';
 import { Role } from '../modules/rbac/entities/role.entity';
 import { Permission } from '../modules/rbac/entities/permission.entity';
 import { RolePermission } from '../modules/rbac/entities/role-permission.entity';
@@ -41,6 +42,11 @@ import { SiteContent1700000013000 } from '../migrations/1700000013000-SiteConten
 import { ReviewSoftDelete1700000014000 } from '../migrations/1700000014000-ReviewSoftDelete';
 
 loadEnv();
+
+// CLI-вхід (міграції, сид-скрипти) працює поза Nest і тому поза валідацією
+// ConfigModule → проганяємо ту саму схему тут: без кредів БД або секретів
+// міграція падає з переліком проблем, а не неясною помилкою TypeORM.
+validateEnv(process.env);
 
 export default new DataSource({
   type: 'postgres',

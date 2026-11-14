@@ -1,5 +1,5 @@
 import { Module, RequestMethod } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -31,20 +31,23 @@ import { AdminModule } from './modules/admin/admin.module';
     EventEmitterModule.forRoot({ wildcard: true, delimiter: '.' }),
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
-    LoggerModule.forRoot({
-      pinoHttp: {
-        level: process.env.LOG_LEVEL ?? 'debug',
-        transport:
-          process.env.NODE_ENV === 'production'
-            ? undefined
-            : { target: 'pino-pretty' },
-      },
-      // path-to-regexp v8 (Express 5) більше не приймає «голий» wildcard `*`,
-      // який nestjs-pino реєструє за замовчуванням. Разом із глобальним префіксом
-      // він перетворювався на `/api/v1/*` і спричиняв warning LegacyRouteConverter.
-      // Використовуємо синтаксис named-wildcard, щоб зареєструвати той самий
-      // catch-all без warning-у.
-      forRoutes: [{ path: '{*path}', method: RequestMethod.ALL }],
+    LoggerModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        pinoHttp: {
+          level: config.get<string>('LOG_LEVEL') ?? 'debug',
+          transport:
+            config.get<string>('NODE_ENV') === 'production'
+              ? undefined
+              : { target: 'pino-pretty' },
+        },
+        // path-to-regexp v8 (Express 5) більше не приймає «голий» wildcard `*`,
+        // який nestjs-pino реєструє за замовчуванням. Разом із глобальним префіксом
+        // він перетворювався на `/api/v1/*` і спричиняв warning LegacyRouteConverter.
+        // Використовуємо синтаксис named-wildcard, щоб зареєструвати той самий
+        // catch-all без warning-у.
+        forRoutes: [{ path: '{*path}', method: RequestMethod.ALL }],
+      }),
     }),
     CommonModule,
     HealthModule,
