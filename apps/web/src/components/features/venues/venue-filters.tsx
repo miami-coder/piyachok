@@ -76,12 +76,9 @@ function RatingStars({ minRating, onToggle }: {
 
 export function VenueFilters({ initial }: { initial: CatalogQuery }) {
   const {
-    q, setQ, sort, setSort, type, setType,
-    tag, toggleTag, feature, setFeature, toggleFeature,
-    tags, types, features,
-    minCheck, setMinCheck, maxCheck, setMaxCheck,
-    minRating, toggleMinRating, radiusKm, setRadiusKm,
-    geo, geoError, apply, reset, nearMe,
+    draft, update, tags, types, features,
+    toggleTag, toggleFeature, toggleMinRating,
+    apply, reset, nearMe, geoError,
   } = useVenueFilters(initial)
 
   return (
@@ -95,16 +92,16 @@ export function VenueFilters({ initial }: { initial: CatalogQuery }) {
         {/* Пошук: у хедері (sm+) він уже є — тут показуємо лише до sm, щоб не дублювати */}
         <label className="w-44 shrink-0 text-sm sm:hidden">
           Пошук
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Назва або адреса" className="mt-1" />
+          <Input value={draft.q} onChange={(e) => update({ q: e.target.value })} placeholder="Назва або адреса" className="mt-1" />
         </label>
         <label className="w-44 shrink-0 text-sm lg:w-auto">
           Сортування
-          <Select value={sort} onChange={(e) => setSort(e.target.value as CatalogQuery['sort'])} className="mt-1">
+          <Select value={draft.sort} onChange={(e) => update({ sort: e.target.value as CatalogQuery['sort'] })} className="mt-1">
             <option value="newest">Нові</option>
             <option value="rating">За рейтингом</option>
             <option value="check">За середнім чеком</option>
             <option value="name">За алфавітом</option>
-            <option value="distance" disabled={!geo}>Поблизу (потрібна геолокація)</option>
+            <option value="distance" disabled={!draft.geo}>Поблизу (потрібна геолокація)</option>
           </Select>
         </label>
         <label className="w-44 shrink-0 text-sm lg:w-auto">
@@ -112,14 +109,14 @@ export function VenueFilters({ initial }: { initial: CatalogQuery }) {
           {/* Фолбек: довідник не вантажиться — не ховай
               блок, а лиши ручний input, щоб активний URL-фільтр лишався десь видимим */}
           {types.length > 0 ? (
-            <Select value={type} onChange={(e) => setType(e.target.value)} className="mt-1">
+            <Select value={draft.type} onChange={(e) => update({ type: e.target.value })} className="mt-1">
               <option value="">Всі типи</option>
               {types.map((t) => (
                 <option key={t.id} value={t.slug}>{t.name}</option>
               ))}
             </Select>
           ) : (
-            <Input value={type} onChange={(e) => setType(e.target.value)} placeholder="напр. bar" className="mt-1" />
+            <Input value={draft.type} onChange={(e) => update({ type: e.target.value })} placeholder="напр. bar" className="mt-1" />
           )}
         </label>
         <div className="w-44 shrink-0 text-sm lg:w-auto">
@@ -128,17 +125,17 @@ export function VenueFilters({ initial }: { initial: CatalogQuery }) {
             <FilterChips
               ariaLabel="Теги"
               chips={tags.map((t) => ({ key: t.id, value: t.slug, text: `#${t.name}` }))}
-              isActive={(v) => csvIncludes(tag, v)}
+              isActive={(v) => csvIncludes(draft.tag, v)}
               onToggle={toggleTag}
             />
           )}
         </div>
         <div className="w-44 shrink-0 text-sm lg:w-auto">
           <span>Особливості</span>
-          {features.length === 0 && feature && (
+          {features.length === 0 && draft.feature && (
             <Input
-              value={feature}
-              onChange={(e) => setFeature(e.target.value)}
+              value={draft.feature}
+              onChange={(e) => update({ feature: e.target.value })}
               aria-label="Особливості вручну (через кому)"
               className="mt-1"
             />
@@ -147,29 +144,29 @@ export function VenueFilters({ initial }: { initial: CatalogQuery }) {
             <FilterChips
               ariaLabel="Особливості"
               chips={features.map((f) => ({ key: f.id, value: f.code, text: f.icon ? `${f.icon} ${f.name}` : f.name }))}
-              isActive={(v) => csvIncludes(feature, v)}
+              isActive={(v) => csvIncludes(draft.feature, v)}
               onToggle={toggleFeature}
             />
           )}
         </div>
         <label className="w-28 shrink-0 text-sm lg:w-auto">
           Чек від
-          <Input type="number" min="0" value={minCheck} onChange={(e) => setMinCheck(e.target.value)} className="mt-1" />
+          <Input type="number" min="0" value={draft.minCheck} onChange={(e) => update({ minCheck: e.target.value })} className="mt-1" />
         </label>
         <label className="w-28 shrink-0 text-sm lg:w-auto">
           Чек до
-          <Input type="number" min="0" value={maxCheck} onChange={(e) => setMaxCheck(e.target.value)} className="mt-1" />
+          <Input type="number" min="0" value={draft.maxCheck} onChange={(e) => update({ maxCheck: e.target.value })} className="mt-1" />
         </label>
         <div className="w-44 shrink-0 lg:w-auto">
           <span className="text-sm">Рейтинг</span>
-          <RatingStars minRating={minRating} onToggle={toggleMinRating} />
+          <RatingStars minRating={draft.minRating} onToggle={toggleMinRating} />
         </div>
         <div className="w-28 shrink-0 lg:w-auto">
           <label className="text-sm">
             Радіус (км)
-            <Input type="number" min="0.1" max="100" step="any" value={radiusKm} onChange={(e) => setRadiusKm(e.target.value)} placeholder="порожньо = усі" className="mt-1" />
+            <Input type="number" min="0.1" max="100" step="any" value={draft.radiusKm} onChange={(e) => update({ radiusKm: e.target.value })} placeholder="порожньо = усі" className="mt-1" />
           </label>
-          {geo && <span className="mt-1 block text-xs text-muted">{radiusKm ? `Поблизу, радіус ${radiusKm} км` : 'Поблизу, без обмеження радіуса'}</span>}
+          {draft.geo && <span className="mt-1 block text-xs text-muted">{draft.radiusKm ? `Поблизу, радіус ${draft.radiusKm} км` : 'Поблизу, без обмеження радіуса'}</span>}
         </div>
         <div className="flex shrink-0 gap-2 lg:w-auto lg:flex-col">
           <Button type="submit">Застосувати</Button>
