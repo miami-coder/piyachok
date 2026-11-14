@@ -338,9 +338,7 @@ describe('NewsService.listMine — власник бачить свої нови
       }),
     };
     const venuesSrv = {
-      listMineForUser: jest
-        .fn()
-        .mockResolvedValue([{ id: 'v1' }, { id: 'v2' }]),
+      listMineForUser: jest.fn(),
     };
     const module = await Test.createTestingModule({
       providers: [
@@ -355,7 +353,10 @@ describe('NewsService.listMine — власник бачить свої нови
     const res = await service.listMine('u1', 1, 20);
     expect(res.data).toHaveLength(1);
     const calls = chain.where.mock.calls;
-    expect(calls[0][0]).toContain('venueId IN');
-    expect(calls[0][1]).toEqual({ ids: ['v1', 'v2'] });
+    expect(calls[0][0]).toContain('venueId IN (SELECT v.id FROM venues v');
+    expect(calls[0][0]).toContain('v."ownerId" = :userId');
+    expect(calls[0][1]).toEqual({ userId: 'u1' });
+    // Свої заклади читати в пам'ять не потрібно — ідентифікатори в SQL-підзапиті
+    expect(venuesSrv.listMineForUser).not.toHaveBeenCalled();
   });
 });

@@ -98,7 +98,9 @@ export class NewsService {
 
   /** Список новин власника за всіма його закладами — будь-якого статусу
    *  закладу (власник не втрачає доступ до своїх новин схованого закладу,
-   *  до схвалення закладу доступ до новин втрачався). */
+   *  до схвалення закладу доступ до новин втрачався). Ідентифікатори своїх
+   *  закладів беруться SQL-підзапитом: сущності Venue (та їхні фото)
+   *  для фільтрації не потрібні. */
   async listMine(userId: string, page = 1, limit = 20) {
     const {
       page: p,
@@ -108,13 +110,10 @@ export class NewsService {
       page,
       limit,
     });
-    const myVenues = await this.venues.listMineForUser(userId);
-    if (myVenues.length === 0)
-      return { data: [], meta: buildMeta({ page: p, limit: l, offset: 0 }, 0) };
     const qb = this.news
       .createQueryBuilder('n')
-      .where('n.venueId IN (:...ids)', {
-        ids: myVenues.map((v) => v.id),
+      .where('n.venueId IN (SELECT v.id FROM venues v WHERE v."ownerId" = :userId)', {
+        userId,
       })
       .orderBy('n.publishedAt', 'DESC')
       .skip(offset)
