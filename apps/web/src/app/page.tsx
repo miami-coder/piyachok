@@ -1,6 +1,6 @@
 // Головна сторінка — каталог закладів із пошуком, фільтрами, сортуванням і пагінацією
 
-import { getVenuesCatalog } from '@/services/venues.server'
+import { getVenueTaxonomy, getVenuesCatalog } from '@/services/venues.server'
 import { parseVenue } from '@/types/venue'
 import { parseCatalogQuery, catalogHref, toSearch, type CatalogQuery } from '@/lib/venues/query'
 import { VenueCard } from '@/components/features/venues/venue-card'
@@ -16,7 +16,12 @@ export default async function CatalogPage({ searchParams }: PageProps) {
   const sp = await searchParams
   const query: CatalogQuery = parseCatalogQuery(sp)
 
-  const raw = await getVenuesCatalog(toSearch(query))
+  // Каталог — динамічний (revalidate 0), довідники — кешовані на 5 хв;
+  // обидва запити паралельно, щоб таксономія не подовжувала SSR
+  const [raw, taxonomy] = await Promise.all([
+    getVenuesCatalog(toSearch(query)),
+    getVenueTaxonomy(),
+  ])
   const venues = raw.data.map(parseVenue)
 
   const totalPages = raw.meta ? Math.max(1, Math.ceil(raw.meta.total / raw.meta.limit)) : 1
@@ -29,7 +34,7 @@ export default async function CatalogPage({ searchParams }: PageProps) {
       </div>
       {/* Панель фільтрів ліворуч, результати праворуч (на мобільних панель — стрічка над сіткою) */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <VenueFilters initial={query} />
+        <VenueFilters initial={query} taxonomy={taxonomy} />
         <div className="min-w-0 flex-1">
           {venues.length === 0 ? (
             <EmptyState

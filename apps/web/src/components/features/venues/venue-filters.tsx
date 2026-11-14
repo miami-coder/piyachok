@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import type { CatalogQuery } from '@/lib/venues/query'
+import type { VenueTaxonomy } from '@/types/venue'
 import { RATING_STARS, csvIncludes, useVenueFilters } from './use-venue-filters'
 
 // Чип-фільтр: теги і фічі рендеряться однаково (rounded-full, aria-pressed,
@@ -74,12 +75,12 @@ function RatingStars({ minRating, onToggle }: {
   )
 }
 
-export function VenueFilters({ initial }: { initial: CatalogQuery }) {
+export function VenueFilters({ initial, taxonomy }: { initial: CatalogQuery; taxonomy: VenueTaxonomy }) {
   const {
     draft, update, tags, types, features,
     toggleTag, toggleFeature, toggleMinRating,
     apply, reset, nearMe, geoError,
-  } = useVenueFilters(initial)
+  } = useVenueFilters(initial, taxonomy)
 
   return (
     <form

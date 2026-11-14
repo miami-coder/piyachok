@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { serverFetch, serverFetchList } from '@/lib/api/server-client'
-import { parseVenue, type RawVenue, type Venue } from '@/types/venue'
+import { parseVenue, type RawVenue, type Venue, type TagRef, type TypeRef, type FeatureRef, type VenueTaxonomy } from '@/types/venue'
 import type { RawFavoriteVenue } from '@/types/favorite'
 import type { RawVenueAnalytics } from '@/types/analytics'
 import type { SessionTokens } from '@/lib/auth/session'
@@ -44,6 +44,23 @@ export async function getVenueDetail(id: string, revalidate = 60): Promise<Venue
  *  (бекендовий свій 60-с кеш списку лишається — БД не «стукається» щоразу). */
 export function getVenuesCatalog(query: string) {
   return serverFetchList<RawVenue>(`/venues?${query}`, { revalidate: 0 })
+}
+
+/** Список закладів поточного власника (кабінет). */
+/**
+ * Довідники каталогу (теги/типи/фічі) — одним блоком для SSR-фільтрів.
+ * revalidate 300: таксономія міняється рідко, Data Cache прикриває повторні
+ * відкриття головної; клієнтські запити за довідниками зайві. Падіння
+ * одного довідника не ламає сторінку — гілка з фолбек-інпутом у фільтрах.
+ */
+export async function getVenueTaxonomy(): Promise<VenueTaxonomy> {
+  const revalidate = 300
+  const [tags, types, features] = await Promise.all([
+    serverFetch<TagRef[]>('/venues/tags', { revalidate }).catch(() => [] as TagRef[]),
+    serverFetch<TypeRef[]>('/venues/types', { revalidate }).catch(() => [] as TypeRef[]),
+    serverFetch<FeatureRef[]>('/venues/features', { revalidate }).catch(() => [] as FeatureRef[]),
+  ])
+  return { tags, types, features }
 }
 
 /** Список закладів поточного власника (кабінет). */

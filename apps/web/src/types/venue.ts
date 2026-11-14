@@ -1,5 +1,33 @@
 import type { PaginatedMeta } from '@/types/api'
 
+// --- Довідники каталогу (публічні GET /venues/tags|types|features) ---
+export interface TagRef {
+  id: string
+  name: string
+  slug: string
+  venueCount: number
+}
+
+export interface TypeRef {
+  id: string
+  name: string
+  slug: string
+}
+
+export interface FeatureRef {
+  id: string
+  name: string
+  code: string
+  icon: string | null
+}
+
+/** Усі довідники одним блоком: SSR на сервері, у фільтри — пропсами. */
+export interface VenueTaxonomy {
+  tags: TagRef[]
+  types: TypeRef[]
+  features: FeatureRef[]
+}
+
 // --- Типи «як з бекенда» (raw) ---
 export interface RawVenue {
   id: string

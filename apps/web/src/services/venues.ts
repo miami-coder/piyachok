@@ -1,46 +1,9 @@
-// Клієнтський сервіс закладів: теги, перегляди, CRUD, фото, обране.
+// Клієнтський сервіс закладів: перегляди, CRUD, фото, обране.
 // Обгортки над api()/apiVoid() з src/lib/api/client — опції запитів живуть тут.
+// Довідники тегів/типів/фіч — на сервері (venues.server.ts): сторінка SSR,
+// клієнтські запити каталогу зайві.
 
-import { api, apiList, apiQuiet, apiVoid } from '@/lib/api/client'
-
-/** Довідник тегів для чипів (GET /venues/tags — публічний). */
-export interface TagRef {
-  id: string
-  name: string
-  slug: string
-  venueCount: number
-}
-
-/** Довідник тегів GET /venues/tags — публічний ендпоінт, без авторизації. */
-export async function getVenueTags(signal?: AbortSignal): Promise<TagRef[]> {
-  const res = await apiList<TagRef>('/venues/tags', { signal })
-  return res.data
-}
-
-export interface TypeRef {
-  id: string
-  name: string
-  slug: string
-}
-
-export interface FeatureRef {
-  id: string
-  name: string
-  code: string
-  icon: string | null
-}
-
-/** Довідник типів закладів GET /venues/types — публічний. */
-export async function getVenueTypes(signal?: AbortSignal): Promise<TypeRef[]> {
-  const res = await apiList<TypeRef>('/venues/types', { signal })
-  return res.data
-}
-
-/** Довідник особливостей GET /venues/features — публічний. */
-export async function getVenueFeatures(signal?: AbortSignal): Promise<FeatureRef[]> {
-  const res = await apiList<FeatureRef>('/venues/features', { signal })
-  return res.data
-}
+import { api, apiQuiet, apiVoid } from '@/lib/api/client'
 
 /**
  * POST /venues/:id/view — фіксація перегляду. Fire-and-forget: рекордер нічого

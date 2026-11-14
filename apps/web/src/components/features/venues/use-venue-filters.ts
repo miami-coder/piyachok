@@ -4,15 +4,14 @@
 // стані-обʼєкті, застосування — через URL (?q=…&tag=…), щоб SSR бачив усе.
 // Драфт синхронізується з новим initial під час рендеру (кнопки назад/вперед,
 // «Скинути», переходи за посиланнями зі зміненими фільтрами); зміна page
-// (пагінація) драфт не затирає. Довідники тегів/типів/фіч — публічні GET;
-// чип-клік перемикає slug у CSV. Один AbortController на всі три довідники:
-// cleanup (розмонтування) скасовує запити, guard не пропускає пізній setState,
-// якщо відповідь встигла до abort.
+// (пагінація) драфт не затирає. Довідники тегів/типів/фіч приходять пропсами
+// з SSR (page → getVenueTaxonomy): чипи вже в HTML, запитів на клієнті немає.
+// Чип-клік перемикає slug у CSV.
 
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CatalogQuery } from '@/lib/venues/query'
-import { getVenueTags, getVenueTypes, getVenueFeatures, type TagRef, type TypeRef, type FeatureRef } from '@/services/venues'
+import type { VenueTaxonomy } from '@/types/venue'
 
 // Рейтинг-фільтр зірками: цілі значення 1..5 (у URL досі можна 0.5-крок)
 export const RATING_STARS = [1, 2, 3, 4, 5] as const
@@ -76,29 +75,10 @@ function toggleInCsv(csv: string, value: string): string {
   return next.join(',')
 }
 
-export function useVenueFilters(initial: CatalogQuery) {
+export function useVenueFilters(initial: CatalogQuery, taxonomy: VenueTaxonomy) {
   const router = useRouter()
   const [draft, setDraft] = useState<FiltersDraft>(() => draftFromQuery(initial))
-
-  // Довідники — не фільтри, окремі стани: синхронізація драфта їх не чіпає.
-  const [tags, setTags] = useState<TagRef[]>([])
-  const [types, setTypes] = useState<TypeRef[]>([])
-  const [features, setFeatures] = useState<FeatureRef[]>([])
   const [geoError, setGeoError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const ac = new AbortController()
-    getVenueTags(ac.signal)
-      .then((value) => { if (!ac.signal.aborted) setTags(value) })
-      .catch(() => undefined)
-    getVenueTypes(ac.signal)
-      .then((value) => { if (!ac.signal.aborted) setTypes(value) })
-      .catch(() => undefined)
-    getVenueFeatures(ac.signal)
-      .then((value) => { if (!ac.signal.aborted) setFeatures(value) })
-      .catch(() => undefined)
-    return () => ac.abort()
-  }, [])
 
   // Синхронізація з URL: офіційний патерн «adjusting state when props
   // change» — setState одразу під час рендеру при зміні ключа фільтрів.
@@ -173,7 +153,7 @@ export function useVenueFilters(initial: CatalogQuery) {
 
   return {
     draft, update,
-    tags, types, features,
+    tags: taxonomy.tags, types: taxonomy.types, features: taxonomy.features,
     toggleTag, toggleFeature, toggleMinRating,
     apply, reset, nearMe, geoError,
   }
