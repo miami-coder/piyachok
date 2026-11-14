@@ -132,6 +132,53 @@ describe('VenuesService', () => {
     service = module.get(VenuesService);
   });
 
+  it('create пише фічі/теги/тип у em транзакції — не поза нею', async () => {
+    // Окремий em транзакції (не той самий em beforeEach): якщо write-виклик
+    // поїде поза manager.transaction, він отримає інший менеджер і впаде.
+    const txEm = {
+      save: jest.fn(async (e: any) => ({ ...e, id: 'v-new' })),
+      delete: jest.fn(),
+    };
+    venues.manager.transaction.mockImplementation(async (cb: any) => cb(txEm));
+    featuresRepo.find.mockResolvedValue([{ id: 'f1', code: 'wifi' }]);
+    tagsRepo.find.mockResolvedValue([{ id: 't1', slug: 'beer' }]);
+    venueTypesRepo.findOne.mockResolvedValue({ id: 'ty1', slug: 'bar' });
+    const wf = jest
+      .spyOn(VenueTaxonomyService.prototype, 'writeFeatures')
+      .mockResolvedValue(undefined);
+    const wt = jest
+      .spyOn(VenueTaxonomyService.prototype, 'writeTags')
+      .mockResolvedValue(undefined);
+    const wty = jest
+      .spyOn(VenueTaxonomyService.prototype, 'writeType')
+      .mockResolvedValue(undefined);
+    try {
+      await service.create('u1', {
+        name: 'X',
+        address: 'Y',
+        featureCodes: ['wifi'],
+        tagSlugs: ['beer'],
+        typeSlug: 'bar',
+      });
+
+      // id повернутий тим самим save транзакції → id приходить із ланцюга tx
+      const venueId = 'v-new';
+      expect(wf).toHaveBeenCalledWith(venueId, [{ id: 'f1', code: 'wifi' }], txEm);
+      expect(wt).toHaveBeenCalledWith(venueId, [{ id: 't1', slug: 'beer' }], txEm);
+      expect(wty).toHaveBeenCalledWith(venueId, { id: 'ty1', slug: 'bar' }, txEm);
+      // Сам заклад теж записаний у той самий em транзакції, а не повз неї.
+      expect(txEm.save).toHaveBeenCalledWith(
+        expect.objectContaining({ ownerId: 'u1', name: 'X' }),
+      );
+      expect(em.save).not.toHaveBeenCalled();
+      expect(wf).toHaveBeenCalledTimes(1);
+      expect(wt).toHaveBeenCalledTimes(1);
+      expect(wty).toHaveBeenCalledTimes(1);
+    } finally {
+      [wf, wt, wty].forEach((s) => s.mockRestore());
+    }
+  });
+
   it('create sets status=pending and emits event', async () => {
     const v = await service.create('u1', { name: 'X', address: 'Y' });
     expect((v as any).status).toBe(VenueStatus.Pending);
