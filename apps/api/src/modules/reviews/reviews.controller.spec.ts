@@ -10,7 +10,6 @@ describe('ReviewsController', () => {
   beforeEach(async () => {
     reviews = {
       create: jest.fn(),
-      assertCanCreate: jest.fn(),
       listForVenue: jest.fn(),
       findOneOrThrow: jest.fn(),
       update: jest.fn(),
