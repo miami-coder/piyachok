@@ -7,6 +7,7 @@ import { getHangouts, getMyHangoutIds } from '@/services/hangouts.server'
 import { getSessionTokens } from '@/lib/auth/session'
 import { parseHangout, HANGOUT_STATUS_LABELS, type HangoutStatus } from '@/types/hangout'
 import { formatMoney } from '@/lib/utils/format'
+import { dateParam } from '@/lib/utils/date-range'
 // Лейбл payer — та сама константа, що й у формі створення/кабінеті (єдине джерело копірайту)
 import { HANGOUT_PAYERS } from '@/lib/validation/hangout'
 
@@ -17,9 +18,6 @@ export const revalidate = 0
 
 const LIMIT = 12
 const STATUSES = ['open', 'filled', 'cancelled', 'completed'] as const
-// Формат дати фільтра з URL (YYYY-MM-DD): сире значення з query не
-// інтерполюємо у запит — невалідне відкидаємо (фільтр просто не застосовується)
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 interface Props {
   searchParams: Promise<{ venueId?: string; date?: string; status?: string; page?: string }>
@@ -34,8 +32,7 @@ export default async function HangoutsPage({ searchParams }: Props) {
     ? (statusParam as HangoutStatus)
     : 'open'
   const venueId = sp?.venueId?.trim() || undefined
-  const dateParam = sp?.date?.trim()
-  const date = dateParam && DATE_RE.test(dateParam) ? dateParam : undefined
+  const date = dateParam(sp?.date?.trim())
 
   const qs = [`page=${page}`, `limit=${LIMIT}`, `status=${status}`]
   if (venueId) qs.push(`venueId=${encodeURIComponent(venueId)}`)

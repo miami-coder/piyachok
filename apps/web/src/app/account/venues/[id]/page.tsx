@@ -17,6 +17,7 @@ import { parseVenue, VENUE_STATUS_LABELS } from '@/types/venue'
 import { parseComplaint, type AdminComplaint } from '@/types/admin'
 import { COMPLAINT_REASONS } from '@/lib/validation/complaint'
 import { formatDate } from '@/lib/utils/format'
+import { defaultAnalyticsRange, dateParam } from '@/lib/utils/date-range'
 import { Pagination } from '@/components/ui/pagination'
 
 interface Props {
@@ -34,19 +35,6 @@ const TABS = [
 ] as const
 
 type TabKey = (typeof TABS)[number]['key']
-
-// Формат дати аналітики з URL (YYYY-MM-DD): сире значення з query не
-// інтерполюємо у запит — невалідне відкидаємо на дефолтний період
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
-
-// react-hooks/purity не пускає Date.now()/new Date() прямо в рендері —
-// обгортаємо дефолтний період (to = сьогодні, from = to − 30 днів) у хелпер
-function defaultAnalyticsRange() {
-  return {
-    to: new Date().toLocaleDateString('en-CA'),
-    from: new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA'),
-  }
-}
 
 export default async function ManageVenuePage({ params, searchParams }: Props) {
   const tokens = await getSessionTokens()
@@ -111,11 +99,11 @@ export default async function ManageVenuePage({ params, searchParams }: Props) {
       {tab === 'news' && <VenueNewsManager venueId={venue.id} news={news} />}
       {tab === 'messages' && <VenueMessagesManager venueId={venue.id} messages={messages} />}
       {tab === 'analytics' && (
-        // діапазон із URL (YYYY-MM-DD, en-CA); дефолт — сьогодні / сьогодні − 30 днів
+        // діапазон із URL (YYYY-MM-DD); дефолт — сьогодні / сьогодні − 30 днів
         <VenueAnalytics
           venueId={venue.id}
-          from={sp?.from && DATE_RE.test(sp.from) ? sp.from : defaultAnalyticsRange().from}
-          to={sp?.to && DATE_RE.test(sp.to) ? sp.to : defaultAnalyticsRange().to}
+          from={dateParam(sp?.from, defaultAnalyticsRange().from)}
+          to={dateParam(sp?.to, defaultAnalyticsRange().to)}
         />
       )}
       {tab === 'complaints' && (

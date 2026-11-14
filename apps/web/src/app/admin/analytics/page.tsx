@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { getAnalyticsTimeseries, getAnalyticsVenues } from '@/services/admin.server'
 import { getSessionTokens } from '@/lib/auth/session'
+import { defaultAnalyticsRange, dateParam } from '@/lib/utils/date-range'
 import {
   AdminAnalyticsControls,
   AnalyticsPeriodLabel,
@@ -11,17 +12,7 @@ import {
 
 export const revalidate = 0
 
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const GRANULARITIES: Granularity[] = ['day', 'week', 'month']
-
-// react-hooks/purity: дефолтний період рахуємо поза рендером (як у
-// account/venues/[id]/page.tsx)
-function defaultRange() {
-  return {
-    to: new Date().toLocaleDateString('en-CA'),
-    from: new Date(Date.now() - 30 * 86400000).toLocaleDateString('en-CA'),
-  }
-}
 
 interface Props {
   searchParams: Promise<{ from?: string; to?: string; granularity?: string }>
@@ -31,9 +22,9 @@ interface Props {
 // гранулярністю day/week/month + топ закладів за переглядами
 export default async function AdminAnalyticsPage({ searchParams }: Props) {
   const sp = await searchParams
-  const d = defaultRange()
-  const from = sp?.from && DATE_RE.test(sp.from) ? sp.from : d.from
-  const to = sp?.to && DATE_RE.test(sp.to) ? sp.to : d.to
+  const d = defaultAnalyticsRange()
+  const from = dateParam(sp?.from, d.from)
+  const to = dateParam(sp?.to, d.to)
   const granularity: Granularity =
     sp?.granularity && GRANULARITIES.includes(sp.granularity as Granularity)
       ? (sp.granularity as Granularity)
