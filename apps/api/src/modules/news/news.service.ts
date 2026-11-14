@@ -8,6 +8,7 @@ import { Repository } from 'typeorm';
 import { News, NewsStatus } from './entities/news.entity';
 import { VenueStatus } from '../venues/entities/venue.entity';
 import { CreateNewsDto } from './dto/create-news.dto';
+import { UpdateNewsDto } from './dto/update-news.dto';
 import { VenuesService } from '../venues/venues.service';
 import { PermissionsService } from '../rbac/permissions.service';
 import { FileStorageService } from '../../common/services/file-storage.service';
@@ -170,7 +171,7 @@ export class NewsService {
     return n;
   }
 
-  async update(id: string, userId: string, dto: Partial<CreateNewsDto>) {
+  async update(id: string, userId: string, dto: UpdateNewsDto) {
     const n = await this.get(id);
     await this.assertCanManage(userId, n);
     // Юзер без news:manage:any не може міняти «просунутий» прапор:

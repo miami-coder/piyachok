@@ -20,6 +20,7 @@ import { AuditService } from './audit.service';
 import { USER_ROLE_REMOVED, type UserRoleRemovedEvent } from '../rbac/events';
 import { RoleGrantsService } from '../rbac/role-grants.service';
 import { CacheService } from '../../common/services/cache.service';
+import { UpdateProfileDto } from '../users/dto/update-profile.dto';
 
 /**
  * Бізнес-логіка адміністрування юзерів (контролер у
@@ -78,7 +79,7 @@ export class AdminUsersService {
   }
 
   /** Адмін-онування чужого профілю (інше, ніж self-update у users.controller). */
-  async updateProfile(id: string, dto: Partial<Profile>, actorId: string) {
+  async updateProfile(id: string, dto: UpdateProfileDto, actorId: string) {
     const profile = await this.profiles.findOne({ where: { userId: id } });
     if (!profile) throw new NotFoundException('Профіль не знайдено');
     const before = { ...profile };

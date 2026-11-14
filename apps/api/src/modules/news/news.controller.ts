@@ -34,6 +34,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtUser } from '../../common/decorators/current-user.decorator';
 import { NewsService } from './news.service';
 import { CreateNewsDto } from './dto/create-news.dto';
+import { UpdateNewsDto } from './dto/update-news.dto';
 import { NewsListQueryDto } from './dto/query-news.dto';
 import { News } from './entities/news.entity';
 import {
@@ -114,7 +115,7 @@ export class NewsController {
   update(
     @CurrentUser() u: JwtUser,
     @Param('id', ParseUuidPipe) id: string,
-    @Body() dto: Partial<CreateNewsDto>,
+    @Body() dto: UpdateNewsDto,
   ) {
     return this.news.update(id, u.sub, dto).then((data) => ({ data }));
   }
