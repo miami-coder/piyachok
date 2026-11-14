@@ -11,16 +11,11 @@ import { TopEntry } from './top-entry.entity';
 import { VenueStatus } from '../venues/entities/venue.entity';
 import { PG_CODES, isPgError } from '../../common/utils/pg-error.util';
 import { VenuesService } from '../venues/venues.service';
-
-export interface CreateTopCategoryDto {
-  title: string;
-  position?: number;
-}
-
-export interface CreateTopEntryDto {
-  venueId: string;
-  position?: number;
-}
+import {
+  CreateTopCategoryDto,
+  CreateTopEntryDto,
+  UpdateTopCategoryDto,
+} from './dto/top.dto';
 
 @Injectable()
 export class TopService {
@@ -106,7 +101,7 @@ export class TopService {
 
   async updateCategory(
     id: string,
-    dto: Partial<CreateTopCategoryDto>,
+    dto: UpdateTopCategoryDto,
   ): Promise<TopCategory> {
     const cat = await this.categories.findOne({ where: { id } });
     if (!cat) throw new NotFoundException('Категорію не знайдено');
