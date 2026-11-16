@@ -49,6 +49,8 @@ export function VenueMessagesManager({
       router.refresh()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Не вдалося надіслати відповідь')
+    } finally {
+      setSending(false)
     }
   }
 
