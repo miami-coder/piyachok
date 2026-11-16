@@ -138,4 +138,96 @@ describe('HangoutButton', () => {
     // поля теж скинуті
     expect(screen.getByLabelText(/Мета/i)).toHaveValue('')
   })
+
+  describe('поля і payload', () => {
+    function openForm(fetchMock: ReturnType<typeof vi.fn>) {
+      vi.stubGlobal('fetch', fetchMock)
+      window.localStorage.setItem('hangout-safety-ack', '1')
+      renderWithProviders(<HangoutButton venueId="v1" loginNext="/venues/v1" />, testUser)
+      fireEvent.click(screen.getByRole('button', { name: /пиячок/i }))
+    }
+    const body = (fetchMock: ReturnType<typeof vi.fn>) =>
+      JSON.parse((apiCalls(fetchMock)[0][1] as RequestInit).body as string)
+
+    it('усі поля йдуть у payload з правильними типами (groupSize і desiredBudget — числа)', async () => {
+      const fetchMock = authAwareMock(() => ok201())
+      openForm(fetchMock)
+      fillForm()
+      fireEvent.change(screen.getByLabelText(/Компанія/i), { target: { value: 'female' } })
+      fireEvent.change(screen.getByLabelText(/Розмір групи/i), { target: { value: '5' } })
+      fireEvent.change(screen.getByLabelText(/Хто платить/i), { target: { value: 'split' } })
+      fireEvent.change(screen.getByLabelText(/Бажаний чек/i), { target: { value: '300' } })
+      fireEvent.click(screen.getByRole('button', { name: /Створити/i }))
+      await waitFor(() => expect(apiCalls(fetchMock)).toHaveLength(1))
+      expect(body(fetchMock)).toEqual({
+        date: today(), time: '19:30', purpose: 'Шукаю компанію на дегустацію',
+        gender: 'female', groupSize: 5, payer: 'split', desiredBudget: 300,
+      })
+    })
+
+    it('порожній бюджет не потрапляє в payload (без ключа desiredBudget)', async () => {
+      const fetchMock = authAwareMock(() => ok201())
+      openForm(fetchMock)
+      fillForm()
+      fireEvent.click(screen.getByRole('button', { name: /Створити/i }))
+      await waitFor(() => expect(apiCalls(fetchMock)).toHaveLength(1))
+      expect(body(fetchMock)).not.toHaveProperty('desiredBudget')
+    })
+
+    it('поле дати має min = сьогодні (локальна зона)', () => {
+      openForm(authAwareMock(() => ok201()))
+      expect(screen.getByLabelText(/Дата/i)).toHaveAttribute('min', today())
+    })
+
+    it('значення за замовчуванням: компанія «any», група 2, платить «me»', () => {
+      openForm(authAwareMock(() => ok201()))
+      expect(screen.getByLabelText(/Компанія/i)).toHaveValue('any')
+      expect(screen.getByLabelText(/Розмір групи/i)).toHaveValue(2)
+      expect(screen.getByLabelText(/Хто платить/i)).toHaveValue('me')
+    })
+
+    it('після успіху повторне відкриття — чиста форма зі значеннями за замовчуванням', async () => {
+      const fetchMock = authAwareMock(() => ok201())
+      openForm(fetchMock)
+      fillForm()
+      fireEvent.change(screen.getByLabelText(/Розмір групи/i), { target: { value: '7' } })
+      fireEvent.click(screen.getByRole('button', { name: /Створити/i }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      fireEvent.click(screen.getByRole('button', { name: /пиячок/i }))
+      expect(screen.getByLabelText(/Мета/i)).toHaveValue('')
+      expect(screen.getByLabelText(/Розмір групи/i)).toHaveValue(2)
+    })
+
+    it('поки запит у польоті, кнопка заблокована і другий запит не йде', async () => {
+      let resolve!: (r: Response) => void
+      const pending = new Promise<Response>((r) => { resolve = r })
+      const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).endsWith('/auth/me')) return new Response(JSON.stringify({ data: testUser }), { headers: jsonHeaders })
+        return pending
+      })
+      openForm(fetchMock)
+      fillForm()
+      const submit = screen.getByRole('button', { name: /Створити/i })
+      fireEvent.click(submit)
+      await waitFor(() => expect(submit).toBeDisabled())
+      fireEvent.click(submit)
+      expect(apiCalls(fetchMock)).toHaveLength(1)
+      resolve(ok201())
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+  })
+
+  describe('localStorage недоступний', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    it('попередження показується, «Зрозуміло» все одно відкриває форму', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('denied') })
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('denied') })
+      renderWithProviders(<HangoutButton venueId="v1" loginNext="/venues/v1" />, testUser)
+      fireEvent.click(screen.getByRole('button', { name: /пиячок/i }))
+      expect(screen.getByText(/безпек/i)).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /Зрозуміло, продовжити/i }))
+      expect(screen.getByLabelText(/Мета/i)).toBeInTheDocument()
+    })
+  })
 })
