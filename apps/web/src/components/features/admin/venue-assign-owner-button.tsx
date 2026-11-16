@@ -6,6 +6,7 @@ import { authApiError } from '@/lib/api/client'
 import { assignVenueOwner } from '@/services/venues'
 import { getAdminUserOptions } from '@/services/users'
 import { Modal } from '@/components/ui/modal'
+import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { parseAdminUser, type AdminUser } from '@/types/admin'
 
@@ -82,9 +83,10 @@ export function VenueAssignOwnerButton({
         <label className="block text-sm text-muted" htmlFor={`assign-owner-${venueId}`}>
           Користувач
         </label>
-        <select
+        <Select
+          variant="outlined"
           id={`assign-owner-${venueId}`}
-          className="mt-1 w-full rounded-xl border border-strong bg-bg px-3 py-2 text-sm text-ink focus:border-amber-500 focus:outline-none"
+          className="mt-1 text-sm"
           value={userId}
           onChange={(e) => setUserId(e.target.value)}
         >
@@ -95,7 +97,7 @@ export function VenueAssignOwnerButton({
               {u.name ? `${u.email} — ${u.name}` : u.email}
             </option>
           ))}
-        </select>
+        </Select>
         <div className="mt-4 flex justify-end">
           <button
             type="button"

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useUser } from '@/components/providers/user-provider'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { createComplaint } from '@/services/complaints'
@@ -78,16 +79,16 @@ export function ComplaintButton({ target, label = 'Скарга', loginNext }: P
             <label htmlFor="complaint-reason" className="mb-1 block">
               Причина
             </label>
-            <select
+            <Select
               id="complaint-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value as typeof reason)}
-              className="w-full rounded-xl border border-strong bg-bg px-3 py-2 text-ink focus:border-amber-500 focus:outline-none"
+              variant="outlined"
             >
               {COMPLAINT_REASONS.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="text-sm">

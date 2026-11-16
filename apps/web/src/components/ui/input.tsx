@@ -1,9 +1,18 @@
 'use client'
 
-import type { InputHTMLAttributes } from 'react'
+import type { ComponentProps } from 'react'
 
-const inputClasses = 'w-full rounded-xl bg-raised border border-transparent px-3 py-2 text-ink placeholder:text-faint focus:border-amber-500 focus:outline-none'
+// default — заливка на сторінці; outlined — обрис для полів усередині модалок
+const variantClasses = {
+  default: 'w-full rounded-xl bg-raised border border-transparent px-3 py-2 text-ink placeholder:text-faint focus:border-amber-500 focus:outline-none',
+  outlined: 'w-full rounded-xl border border-strong bg-bg px-3 py-2 text-ink focus:border-amber-500 focus:outline-none',
+}
 
-export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={className ? `${inputClasses} ${className}` : inputClasses} {...props} />
+export function Input({
+  variant = 'default',
+  className,
+  ...props
+}: ComponentProps<'input'> & { variant?: keyof typeof variantClasses }) {
+  const classes = variantClasses[variant]
+  return <input className={className ? `${classes} ${className}` : classes} {...props} />
 }

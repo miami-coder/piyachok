@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { authApiError } from '@/lib/api/client'
 import { resolveComplaint } from '@/services/complaints'
 import { Modal } from '@/components/ui/modal'
+import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 
 // Вирішення скарги: статус (за замовчуванням resolved) + optional note.
@@ -82,12 +83,13 @@ export function ComplaintResolveButton({ complaintId }: { complaintId: string })
         <label htmlFor={`complaint-note-${complaintId}`} className="mt-3 block text-sm text-muted">
           Примітка (необовʼязково)
         </label>
-        <textarea
+        <Textarea
+          variant="outlined"
           id={`complaint-note-${complaintId}`}
           rows={3}
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-strong bg-bg px-3 py-2 text-sm text-ink placeholder:text-faint focus:border-amber-500 focus:outline-none"
+          className="mt-1 text-sm placeholder:text-faint"
         />
         {error && (
           <p role="alert" className="mt-2 text-sm text-danger">

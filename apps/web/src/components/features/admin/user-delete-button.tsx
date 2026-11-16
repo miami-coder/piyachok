@@ -6,6 +6,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
 import { authApiError } from '@/lib/api/client'
@@ -58,13 +59,14 @@ export function UserDeleteButton({ userId, email }: { userId: string; email: str
         <label className="mt-3 block text-sm text-muted" htmlFor={`delete-confirm-${userId}`}>
           Введіть email користувача для підтвердження
         </label>
-        <input
+        <Input
+          variant="outlined"
           id={`delete-confirm-${userId}`}
           type="email"
           autoComplete="off"
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          className="mt-1 w-full rounded-xl border border-strong bg-bg px-3 py-2 text-sm text-ink focus:border-amber-500 focus:outline-none"
+          className="mt-1 text-sm"
         />
         <div className="mt-4 flex justify-end">
           <button

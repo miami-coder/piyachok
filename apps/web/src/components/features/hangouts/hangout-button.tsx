@@ -5,6 +5,8 @@ import { useState } from 'react'
 import { useUser } from '@/components/providers/user-provider'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/toast'
 import { createVenueHangout } from '@/services/hangouts'
@@ -134,23 +136,23 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
             <div className="grid grid-cols-2 gap-3">
               <div className="text-sm">
                 <label htmlFor="hg-date" className="mb-1 block">Дата</label>
-                <input
+                <Input
                   id="hg-date"
                   type="date"
                   min={localToday()}
                   value={date}
                   onChange={(e) => setDate(e.target.value)}
-                  className="w-full rounded-xl border border-strong bg-bg px-3 py-2 text-ink focus:border-amber-500 focus:outline-none"
+                  variant="outlined"
                 />
               </div>
               <div className="text-sm">
                 <label htmlFor="hg-time" className="mb-1 block">Час</label>
-                <input
+                <Input
                   id="hg-time"
                   type="time"
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
-                  className="w-full rounded-xl border border-strong bg-bg px-3 py-2 text-ink focus:border-amber-500 focus:outline-none"
+                  variant="outlined"
                 />
               </div>
             </div>
@@ -170,27 +172,27 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
             <div className="grid grid-cols-2 gap-3">
               <div className="text-sm">
                 <label htmlFor="hg-gender" className="mb-1 block">Компанія</label>
-                <select
+                <Select
                   id="hg-gender"
                   value={gender}
                   onChange={(e) => setGender(e.target.value as typeof gender)}
-                  className="w-full rounded-xl border border-strong bg-bg px-3 py-2 text-ink focus:border-amber-500 focus:outline-none"
+                  variant="outlined"
                 >
                   {HANGOUT_GENDERS.map((g) => (
                     <option key={g.value} value={g.value}>{g.label}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="text-sm">
                 <label htmlFor="hg-size" className="mb-1 block">Розмір групи (1-20)</label>
-                <input
+                <Input
                   id="hg-size"
                   type="number"
                   min={1}
                   max={20}
                   value={groupSize}
                   onChange={(e) => setGroupSize(e.target.value)}
-                  className="w-full rounded-xl border border-strong bg-bg px-3 py-2 text-ink focus:border-amber-500 focus:outline-none"
+                  variant="outlined"
                 />
               </div>
             </div>
@@ -198,27 +200,27 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
             <div className="grid grid-cols-2 gap-3">
               <div className="text-sm">
                 <label htmlFor="hg-payer" className="mb-1 block">Хто платить</label>
-                <select
+                <Select
                   id="hg-payer"
                   value={payer}
                   onChange={(e) => setPayer(e.target.value as typeof payer)}
-                  className="w-full rounded-xl border border-strong bg-bg px-3 py-2 text-ink focus:border-amber-500 focus:outline-none"
+                  variant="outlined"
                 >
                   {HANGOUT_PAYERS.map((p) => (
                     <option key={p.value} value={p.value}>{p.label}</option>
                   ))}
-                </select>
+                </Select>
               </div>
               <div className="text-sm">
                 <label htmlFor="hg-budget" className="mb-1 block">Бажаний чек (₴, опційно)</label>
-                <input
+                <Input
                   id="hg-budget"
                   type="number"
                   min={0}
                   max={100000}
                   value={desiredBudget}
                   onChange={(e) => setDesiredBudget(e.target.value)}
-                  className="w-full rounded-xl border border-strong bg-bg px-3 py-2 text-ink focus:border-amber-500 focus:outline-none"
+                  variant="outlined"
                 />
               </div>
             </div>
