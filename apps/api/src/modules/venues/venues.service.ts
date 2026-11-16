@@ -96,25 +96,7 @@ export class VenuesService {
     const venue = await this.findOneOrThrow(venueId);
     await this.assertCanEdit(userId, venue);
 
-    // Обов'язкові поля: відсутнє/null не міняє старе (очищати не можна).
-    venue.name = dto.name ?? venue.name;
-    venue.address = dto.address ?? venue.address;
-
-    // Опційні поля: «ключ присутній у запиті» = записати нове значення, при
-    // цьому явний null (або порожній рядок після тріму) записує NULL у базу;
-    // відсутній ключ = поле не чіпаємо. Відмінність null-від-відсутності —
-    // єдиний спосіб очистити опційне поле через PATCH.
-    if ('description' in dto) {
-      const d = dto.description?.trim();
-      venue.description = d ? d : null;
-    }
-    if ('latitude' in dto) venue.latitude = dto.latitude ?? null;
-    if ('longitude' in dto) venue.longitude = dto.longitude ?? null;
-    if ('contacts' in dto)
-      venue.contacts = this.pickNonEmpty(dto.contacts ?? {});
-    if ('workingHours' in dto)
-      venue.workingHours = this.pickNonEmpty(dto.workingHours ?? {});
-    if ('averageCheck' in dto) venue.averageCheck = dto.averageCheck ?? null;
+    this.applyScalarFields(venue, dto);
 
     // Набірні поля: ключ присутній — замінюємо набір повністю (порожній
     // масив/порожній рядок/null = очистити), невідомі коди/слаги — 400.
@@ -143,6 +125,32 @@ export class VenuesService {
       venueId: saved.id,
     } satisfies VenueUpdatedEvent);
     return saved;
+  }
+
+  /**
+   * Скалярні поля закладу (без прив'язок таксономій): мутує сущність,
+   * збереження і транзакція — справа update.
+   */
+  private applyScalarFields(venue: Venue, dto: UpdateVenueDto): void {
+    // Обов'язкові поля: відсутнє/null не міняє старе (очищати не можна).
+    venue.name = dto.name ?? venue.name;
+    venue.address = dto.address ?? venue.address;
+
+    // Опційні поля: «ключ присутній у запиті» = записати нове значення, при
+    // цьому явний null (або порожній рядок після тріму) записує NULL у базу;
+    // відсутній ключ = поле не чіпаємо. Відмінність null-від-відсутності —
+    // єдиний спосіб очистити опційне поле через PATCH.
+    if ('description' in dto) {
+      const d = dto.description?.trim();
+      venue.description = d ? d : null;
+    }
+    if ('latitude' in dto) venue.latitude = dto.latitude ?? null;
+    if ('longitude' in dto) venue.longitude = dto.longitude ?? null;
+    if ('contacts' in dto)
+      venue.contacts = this.pickNonEmpty(dto.contacts ?? {});
+    if ('workingHours' in dto)
+      venue.workingHours = this.pickNonEmpty(dto.workingHours ?? {});
+    if ('averageCheck' in dto) venue.averageCheck = dto.averageCheck ?? null;
   }
 
   /** Об'єкт без порожніх ключів: строкові значення трімуємо, пусті/null
