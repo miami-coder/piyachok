@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { createHash } from 'crypto';
 import { Venue, VenueStatus } from './entities/venue.entity';
 import { QueryVenuesDto, VenueSort } from './dto/query-venues.dto';
@@ -56,7 +56,24 @@ export class VenuesCatalogService {
       };
     }
 
-    const qb = this.venues
+    const qb = this.buildBaseQuery();
+    this.applyFilters(qb, query);
+    this.applySort(qb, query);
+    qb.skip(offset).take(limit);
+
+    const [rows, total] = await qb.getManyAndCount();
+    await this.cache.set(cacheKey, { data: rows, total }, 60);
+    return { data: rows, meta: buildMeta({ page, limit, offset }, total) };
+  }
+
+  /** Скидання кешу списку: викликається мутаціями агрегату та слушачем подій. */
+  async invalidateListCache(): Promise<void> {
+    await this.cache.delByPattern(VenuesCatalogService.LIST_CACHE_PATTERN);
+  }
+
+  /** Базовий запит каталогу: лише схвалені заклади з фото, фічами, тегами та типами. */
+  private buildBaseQuery(): SelectQueryBuilder<Venue> {
+    return this.venues
       .createQueryBuilder('v')
       .leftJoinAndSelect('v.photos', 'photo')
       .leftJoinAndSelect('v.featureAssignments', 'fa')
@@ -66,7 +83,13 @@ export class VenuesCatalogService {
       .leftJoinAndSelect('v.venueTypeAssignments', 'vta')
       .leftJoinAndSelect('vta.type', 'ty')
       .where('v.status = :status', { status: VenueStatus.Approved });
+  }
 
+  /** Фільтри запиту; порядок умов у SQL збігається з порядком тут. */
+  private applyFilters(
+    qb: SelectQueryBuilder<Venue>,
+    query: QueryVenuesDto,
+  ): void {
     if (query.q) {
       // % и _ — літерали, не wildcard
       const safe = `%${escapeLike(query.q)}%`;
@@ -115,7 +138,13 @@ export class VenuesCatalogService {
         { lng: query.lng, lat: query.lat, meters: query.radiusKm * 1000 },
       );
     }
+  }
 
+  /** Сортування запиту; для distance без координат — fallback на «нові». */
+  private applySort(
+    qb: SelectQueryBuilder<Venue>,
+    query: QueryVenuesDto,
+  ): void {
     const sort: VenueSort = query.sort ?? 'newest';
     switch (sort) {
       case 'rating':
@@ -149,16 +178,6 @@ export class VenuesCatalogService {
       default:
         qb.orderBy('v.createdAt', 'DESC');
     }
-    qb.skip(offset).take(limit);
-
-    const [rows, total] = await qb.getManyAndCount();
-    await this.cache.set(cacheKey, { data: rows, total }, 60);
-    return { data: rows, meta: buildMeta({ page, limit, offset }, total) };
-  }
-
-  /** Скидання кешу списку: викликається мутаціями агрегату та слушачем подій. */
-  async invalidateListCache(): Promise<void> {
-    await this.cache.delByPattern(VenuesCatalogService.LIST_CACHE_PATTERN);
   }
 
   private hashQuery(q: QueryVenuesDto): string {
