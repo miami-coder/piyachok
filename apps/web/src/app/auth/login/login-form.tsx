@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input'
 import { useUser } from '@/components/providers/user-provider'
 import { authLogin, authMe } from '@/services/auth'
 import { loginSchema } from '@/lib/validation/auth'
+import { safeNextPath } from '@/lib/utils/safe-next'
 
 export function LoginForm() {
   const router = useRouter()
@@ -43,10 +44,7 @@ export function LoginForm() {
         } catch {
           // пропускаємо — router.refresh() добуде користувача в layout
         }
-        // Редірект лише на внутрішні шляхи — захист від open-redirect
-        const next = searchParams.get('next')
-        const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
-        router.push(safeNext)
+        router.push(safeNextPath(searchParams.get('next')))
         router.refresh()
         return
       }

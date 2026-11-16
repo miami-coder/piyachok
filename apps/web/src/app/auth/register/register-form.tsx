@@ -13,22 +13,64 @@ import { Input } from '@/components/ui/input'
 import { useUser } from '@/components/providers/user-provider'
 import { authMe, authRegister } from '@/services/auth'
 import { registerSchema } from '@/lib/validation/auth'
+import { safeNextPath } from '@/lib/utils/safe-next'
+
+const INITIAL_FORM = {
+  firstname: '',
+  lastname: '',
+  email: '',
+  password: '',
+  age: '',
+  phone: '',
+  acceptEula: false,
+}
+
+// Поле реєстрації: id — reg-<name>, помилка — reg-<name>-error (aria-describedby)
+function Field({ name, label, type, autoComplete, min, value, error, onChange }: {
+  name: string
+  label: string
+  type?: string
+  autoComplete?: string
+  min?: number
+  value: string
+  error?: string
+  onChange: (value: string) => void
+}) {
+  const id = `reg-${name}`
+  return (
+    <div className="text-sm">
+      <label htmlFor={id}>
+        {label}
+      </label>
+      <Input
+        id={id}
+        type={type}
+        min={min}
+        aria-describedby={error ? `${id}-error` : undefined}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error && (
+        <span id={`${id}-error`} role="alert" className="mt-1 block text-danger">{error}</span>
+      )}
+    </div>
+  )
+}
 
 export function RegisterForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { setUser } = useUser()
-  const [firstname, setFirstname] = useState('')
-  const [lastname, setLastname] = useState('')
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [age, setAge] = useState('')
-  const [phone, setPhone] = useState('')
-  const [acceptEula, setAcceptEula] = useState(false)
+  const [form, setForm] = useState(INITIAL_FORM)
   // Помилки полів з zod: { ім'я поля => український текст }
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+
+  function setField<K extends keyof typeof INITIAL_FORM>(key: K, value: (typeof INITIAL_FORM)[K]) {
+    setForm((prev) => ({ ...prev, [key]: value }))
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -37,13 +79,9 @@ export function RegisterForm() {
     // Клієнтська валідація до будь-якого запиту в мережу;
     // порожні опціональні поля не відправляємо на бекенд
     const parsed = registerSchema.safeParse({
-      firstname,
-      lastname,
-      email,
-      password,
-      age: age === '' ? undefined : age,
-      phone: phone === '' ? undefined : phone,
-      acceptEula,
+      ...form,
+      age: form.age === '' ? undefined : form.age,
+      phone: form.phone === '' ? undefined : form.phone,
     })
     if (!parsed.success) {
       const errors: Record<string, string> = {}
@@ -60,10 +98,7 @@ export function RegisterForm() {
       if (res.ok) {
         const me = await authMe()
         if (me) setUser(me)
-        // Редірект лише на внутрішні шляхи — захист від open-redirect
-        const next = searchParams.get('next')
-        const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : '/'
-        router.push(safeNext)
+        router.push(safeNextPath(searchParams.get('next')))
         router.refresh()
         return
       }
@@ -84,108 +119,20 @@ export function RegisterForm() {
       {error && <p role="alert" className="rounded-lg bg-danger/15 p-2 text-sm text-danger">{error}</p>}
       {/* Помилка — сусід label, а не вкладена в нього: не забруднює accessible name;
           зв'язок через aria-describedby */}
-      <div className="text-sm">
-        <label htmlFor="reg-firstname">
-          Ім&apos;я
-        </label>
-        <Input
-          id="reg-firstname"
-          aria-describedby={fieldErrors.firstname ? 'reg-firstname-error' : undefined}
-          value={firstname}
-          autoComplete="given-name"
-          onChange={(e) => setFirstname(e.target.value)}
-        />
-        {fieldErrors.firstname && (
-          <span id="reg-firstname-error" role="alert" className="mt-1 block text-danger">{fieldErrors.firstname}</span>
-        )}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="reg-lastname">
-          Прізвище
-        </label>
-        <Input
-          id="reg-lastname"
-          aria-describedby={fieldErrors.lastname ? 'reg-lastname-error' : undefined}
-          value={lastname}
-          autoComplete="family-name"
-          onChange={(e) => setLastname(e.target.value)}
-        />
-        {fieldErrors.lastname && (
-          <span id="reg-lastname-error" role="alert" className="mt-1 block text-danger">{fieldErrors.lastname}</span>
-        )}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="reg-email">
-          Email
-        </label>
-        <Input
-          id="reg-email"
-          type="email"
-          aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined}
-          autoComplete="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        {fieldErrors.email && (
-          <span id="reg-email-error" role="alert" className="mt-1 block text-danger">{fieldErrors.email}</span>
-        )}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="reg-password">
-          Пароль
-        </label>
-        <Input
-          id="reg-password"
-          type="password"
-          aria-describedby={fieldErrors.password ? 'reg-password-error' : undefined}
-          autoComplete="new-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {fieldErrors.password && (
-          <span id="reg-password-error" role="alert" className="mt-1 block text-danger">{fieldErrors.password}</span>
-        )}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="reg-age">
-          Вік (необов&apos;язково)
-        </label>
-        <Input
-          id="reg-age"
-          type="number"
-          min={18}
-          aria-describedby={fieldErrors.age ? 'reg-age-error' : undefined}
-          value={age}
-          onChange={(e) => setAge(e.target.value)}
-        />
-        {fieldErrors.age && (
-          <span id="reg-age-error" role="alert" className="mt-1 block text-danger">{fieldErrors.age}</span>
-        )}
-      </div>
-      <div className="text-sm">
-        <label htmlFor="reg-phone">
-          Телефон (необов&apos;язково)
-        </label>
-        <Input
-          id="reg-phone"
-          type="tel"
-          aria-describedby={fieldErrors.phone ? 'reg-phone-error' : undefined}
-          autoComplete="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
-        {fieldErrors.phone && (
-          <span id="reg-phone-error" role="alert" className="mt-1 block text-danger">{fieldErrors.phone}</span>
-        )}
-      </div>
+      <Field name="firstname" label="Ім'я" autoComplete="given-name" value={form.firstname} error={fieldErrors.firstname} onChange={(v) => setField('firstname', v)} />
+      <Field name="lastname" label="Прізвище" autoComplete="family-name" value={form.lastname} error={fieldErrors.lastname} onChange={(v) => setField('lastname', v)} />
+      <Field name="email" label="Email" type="email" autoComplete="email" value={form.email} error={fieldErrors.email} onChange={(v) => setField('email', v)} />
+      <Field name="password" label="Пароль" type="password" autoComplete="new-password" value={form.password} error={fieldErrors.password} onChange={(v) => setField('password', v)} />
+      <Field name="age" label="Вік (необов'язково)" type="number" min={18} value={form.age} error={fieldErrors.age} onChange={(v) => setField('age', v)} />
+      <Field name="phone" label="Телефон (необов'язково)" type="tel" autoComplete="tel" value={form.phone} error={fieldErrors.phone} onChange={(v) => setField('phone', v)} />
       {/* aria-describedby веде на текст EULA: скрінрідер озвучує умови після чекбокса */}
       <label id="eula-text" className="flex items-start gap-2 text-sm">
         <input
           type="checkbox"
           className="mt-0.5 size-4 accent-amber-500"
-          checked={acceptEula}
+          checked={form.acceptEula}
           aria-describedby="eula-text"
-          onChange={(e) => setAcceptEula(e.target.checked)}
+          onChange={(e) => setField('acceptEula', e.target.checked)}
         />
         Приймаю умови угоди користувача
       </label>
