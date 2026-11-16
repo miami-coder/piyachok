@@ -1,19 +1,14 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
 import { useUser } from '@/components/providers/user-provider'
 import { Button } from '@/components/ui/button'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { useToast } from '@/components/ui/toast'
-import { createVenueHangout } from '@/services/hangouts'
-import { ApiError } from '@/lib/api/parse'
-import { HANGOUT_GENDERS, HANGOUT_PAYERS, hangoutFormSchema } from '@/lib/validation/hangout'
-
-const ACK_KEY = 'hangout-safety-ack'
+import { HANGOUT_GENDERS, HANGOUT_PAYERS } from '@/lib/validation/hangout'
+import { useHangoutForm } from './use-hangout-form'
 
 // «Сьогодні» для min-атрибути інпута — за ЛОКАЛЬНОЮ зоною (en-CA → YYYY-MM-DD),
 // та сама логіка, що й у схемі (фікс Task 8): toISOString() дав би UTC.
@@ -22,27 +17,8 @@ const localToday = () =>
 
 export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNext: string }) {
   const { user } = useUser()
-  const { toast } = useToast()
-  const [open, setOpen] = useState(false)
-  // читаємо прапор підтвердження безпеки одразу в ініціалізаторі:
-  // на SSR localStorage кидає ReferenceError — try/catch дає false
-  const [ack, setAck] = useState(() => {
-    try {
-      return localStorage.getItem(ACK_KEY) === '1'
-    } catch {
-      return false
-    }
-  })
-
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('')
-  const [purpose, setPurpose] = useState('')
-  const [gender, setGender] = useState<'any' | 'male' | 'female'>('any')
-  const [groupSize, setGroupSize] = useState('2')
-  const [payer, setPayer] = useState<'me' | 'split' | 'them'>('me')
-  const [desiredBudget, setDesiredBudget] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [sending, setSending] = useState(false)
+  const { open, setOpen, ack, acknowledge, form, setField, error, sending, close, submit } =
+    useHangoutForm(venueId)
 
   if (!user) {
     return (
@@ -55,59 +31,6 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
         🍻 Знайти пиячок
       </Link>
     )
-  }
-
-  // Спека §5: підтвердження безпеки — один раз, у localStorage.
-  // Приватний режим без localStorage: попередження показуватиметься щоразу, це ок.
-  function acknowledge() {
-    try {
-      localStorage.setItem(ACK_KEY, '1')
-    } catch {
-      // свідомо ігноруємо — безпековий крок просто не запам'ятовується
-    }
-    setAck(true)
-  }
-
-  // Закриття модалки (Скасувати, Escape/фон/«×», успіх): скидаємо помилку
-  // і поля — наступне відкриття не показає застарілу помилку чи prefilled-форму
-  function close() {
-    setOpen(false)
-    setError(null)
-    setDate('')
-    setTime('')
-    setPurpose('')
-    setGender('any')
-    setGroupSize('2')
-    setPayer('me')
-    setDesiredBudget('')
-  }
-
-  async function submit() {
-    setError(null)
-    const parsed = hangoutFormSchema.safeParse({
-      date,
-      time,
-      purpose,
-      gender,
-      groupSize,
-      payer,
-      // пусте поле бюджету не надсилаємо: '' через coerce став би 0
-      ...(desiredBudget !== '' ? { desiredBudget } : {}),
-    })
-    if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? 'Перевірте поля')
-      return
-    }
-    setSending(true)
-    try {
-      await createVenueHangout(venueId, parsed.data)
-      toast('Пиячок створено! Очікуйте на компанію.')
-      close()
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Сервіс тимчасово недоступний')
-    } finally {
-      setSending(false)
-    }
   }
 
   return (
@@ -140,8 +63,8 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
                   id="hg-date"
                   type="date"
                   min={localToday()}
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  value={form.date}
+                  onChange={(e) => setField('date', e.target.value)}
                   variant="outlined"
                 />
               </div>
@@ -150,8 +73,8 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
                 <Input
                   id="hg-time"
                   type="time"
-                  value={time}
-                  onChange={(e) => setTime(e.target.value)}
+                  value={form.time}
+                  onChange={(e) => setField('time', e.target.value)}
                   variant="outlined"
                 />
               </div>
@@ -163,8 +86,8 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
               </label>
               <Textarea
                 id="hg-purpose"
-                value={purpose}
-                onChange={(e) => setPurpose(e.target.value)}
+                value={form.purpose}
+                onChange={(e) => setField('purpose', e.target.value)}
                 placeholder="Наприклад: дегустація крафтового пива, настільні ігри…"
               />
             </div>
@@ -174,8 +97,8 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
                 <label htmlFor="hg-gender" className="mb-1 block">Компанія</label>
                 <Select
                   id="hg-gender"
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value as typeof gender)}
+                  value={form.gender}
+                  onChange={(e) => setField('gender', e.target.value as typeof form.gender)}
                   variant="outlined"
                 >
                   {HANGOUT_GENDERS.map((g) => (
@@ -190,8 +113,8 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
                   type="number"
                   min={1}
                   max={20}
-                  value={groupSize}
-                  onChange={(e) => setGroupSize(e.target.value)}
+                  value={form.groupSize}
+                  onChange={(e) => setField('groupSize', e.target.value)}
                   variant="outlined"
                 />
               </div>
@@ -202,8 +125,8 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
                 <label htmlFor="hg-payer" className="mb-1 block">Хто платить</label>
                 <Select
                   id="hg-payer"
-                  value={payer}
-                  onChange={(e) => setPayer(e.target.value as typeof payer)}
+                  value={form.payer}
+                  onChange={(e) => setField('payer', e.target.value as typeof form.payer)}
                   variant="outlined"
                 >
                   {HANGOUT_PAYERS.map((p) => (
@@ -218,8 +141,8 @@ export function HangoutButton({ venueId, loginNext }: { venueId: string; loginNe
                   type="number"
                   min={0}
                   max={100000}
-                  value={desiredBudget}
-                  onChange={(e) => setDesiredBudget(e.target.value)}
+                  value={form.desiredBudget}
+                  onChange={(e) => setField('desiredBudget', e.target.value)}
                   variant="outlined"
                 />
               </div>
