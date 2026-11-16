@@ -25,6 +25,11 @@ describe('LoginForm: редірект після входу', () => {
     ['без next', '', '/'],
     ['protocol-relative //evil.com', '//evil.com', '/'],
     ['абсолютний https://evil.com', 'https://evil.com', '/'],
+    ['слеш+зворотний слеш /\\evil.com', '/\\evil.com', '/'],
+    ['три слеші ///evil.com', '///evil.com', '/'],
+    ['TAB усередині', '/\t/evil.com', '/'],
+    ['закодований /%2F%2Fevil.com (шлях на нашому сайті)', '/%2F%2Fevil.com', '/%2F%2Fevil.com'],
+    ['query і hash зберігаються', '/venues/v1?tab=reviews#top', '/venues/v1?tab=reviews#top'],
   ])('next: %s → %s', async (_name, next, expected) => {
     nav.search = next ? `next=${encodeURIComponent(next)}` : ''
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) =>
