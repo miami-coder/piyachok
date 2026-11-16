@@ -122,6 +122,17 @@ describe('NewsService', () => {
     expect(r.status).toBe(NewsStatus.Archived);
   });
 
+  it('softDelete глобальної новини дозволено власнику news:manage:any', async () => {
+    news.findOne.mockResolvedValueOnce({
+      id: 'n1',
+      venueId: null,
+      status: NewsStatus.Published,
+    });
+    perms.hasPermission.mockResolvedValueOnce(true);
+    const r = await service.softDelete('n1', 'u1');
+    expect(r.status).toBe(NewsStatus.Archived);
+  });
+
   it('listAdmin без status не фільтрує статус', async () => {
     const qb = news.createQueryBuilder();
     await service.listAdmin({ page: 1, limit: 20 });

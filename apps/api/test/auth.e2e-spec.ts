@@ -51,17 +51,19 @@ describe('Auth E2E', () => {
     expect(res.body.data.email).toBe('authuser@x.com');
   });
 
-  it('rotates refresh token (old becomes invalid)', async () => {
+  it('rotates refresh token (replay in grace window returns the same pair)', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/refresh')
       .send({ refreshToken })
       .expect(201);
     expect(res.body.accessToken).toBeDefined();
-    // Старий refresh token тепер має бути скасованим
-    await request(app.getHttpServer())
+    // Паралельний повтор старого токена в grace-вікні отримує ту саму пару
+    // переможця (а не 401); після logout reuse знову 401 — див. наступний тест
+    const replay = await request(app.getHttpServer())
       .post('/api/v1/auth/refresh')
       .send({ refreshToken })
-      .expect(401);
+      .expect(201);
+    expect(replay.body.refreshToken).toBe(res.body.refreshToken);
     refreshToken = res.body.refreshToken;
   });
 

@@ -218,14 +218,16 @@ export class NewsService {
    * лише news:manage:any.
    */
   private async assertCanManage(userId: string, news: News) {
-    if (!news.venueId)
-      throw new ForbiddenException('Немає дозволу news:manage:any');
-    const venue = await this.venues.findOneOrThrow(news.venueId);
+    const ownerId = news.venueId
+      ? (await this.venues.findOneOrThrow(news.venueId)).ownerId
+      : null;
     await this.perms.assertOwnerOrPermission(
-      venue.ownerId,
+      ownerId,
       userId,
       'news:manage:any',
-      'Не можна керувати новинами цього закладу',
+      news.venueId
+        ? 'Не можна керувати новинами цього закладу'
+        : 'Немає дозволу news:manage:any',
     );
   }
 }

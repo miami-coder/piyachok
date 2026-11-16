@@ -26,7 +26,7 @@ export default async function AdminTopPage() {
     .sort((a, b) => a.name.localeCompare(b.name, 'uk'))
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-4 py-8">
+    <div className="mx-auto w-full max-w-4xl px-4 py-8">
       <h1 className="text-xl font-bold">Топ закладів</h1>
       <p className="mt-1 text-sm text-muted">
         Категорії Топу («Найкращий заклад для весілля» тощо) і склади. Додаються
@@ -35,6 +35,6 @@ export default async function AdminTopPage() {
       <div className="mt-6">
         <TopManager categories={categories} venues={venues} />
       </div>
-    </main>
+    </div>
   )
 }

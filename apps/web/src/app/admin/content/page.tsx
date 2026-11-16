@@ -12,7 +12,7 @@ export default async function AdminContentPage() {
   }))
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8">
+    <div className="mx-auto w-full max-w-3xl px-4 py-8">
       <h1 className="text-xl font-bold">Загальні тексти</h1>
       <p className="mt-1 text-sm text-muted">
         Розділи сайту («Про нас», контакти).
@@ -20,6 +20,6 @@ export default async function AdminContentPage() {
       <div className="mt-6">
         <ContentManager initial={content} />
       </div>
-    </main>
+    </div>
   )
 }
