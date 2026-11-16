@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { VenuesCatalogService } from './venues-catalog.service';
@@ -164,6 +165,241 @@ describe('VenuesCatalogService', () => {
       bracketArg.whereFactory(recorder);
       expect(rec.sql[0]).toContain("ESCAPE '!'");
       expect(rec.params[0].q).toBe('%10!%!_off%');
+    });
+  });
+
+  describe('базовий запит', () => {
+    it('лише схвалені заклади, фото/фічі/теги/типи підтягуються join-ами', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ page: 1, limit: 20 });
+      expect(mockQb.where).toHaveBeenCalledWith('v.status = :status', {
+        status: 'approved',
+      });
+      expect(
+        mockQb.leftJoinAndSelect.mock.calls.map((c: unknown[]) => c.join(' ')),
+      ).toEqual([
+        'v.photos photo',
+        'v.featureAssignments fa',
+        'fa.feature f',
+        'v.venueTags vt',
+        'vt.tag t',
+        'v.venueTypeAssignments vta',
+        'vta.type ty',
+      ]);
+    });
+
+    it('сторінка і ліміт перетворюються на skip/take', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ page: 3, limit: 10 });
+      expect(mockQb.skip).toHaveBeenCalledWith(20);
+      expect(mockQb.take).toHaveBeenCalledWith(10);
+    });
+  });
+
+  describe('фільтри — діапазони, тип, гео', () => {
+    const wheres = (mockQb: any) => mockQb.andWhere.mock.calls;
+
+    it('minRating, minCheck, maxCheck — окремі умови з параметрами', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({
+        page: 1,
+        limit: 20,
+        minRating: 4,
+        minCheck: 100,
+        maxCheck: 500,
+      });
+      expect(wheres(mockQb)).toEqual(
+        expect.arrayContaining([
+          ['v.ratingAvg >= :minRating', { minRating: 4 }],
+          ['v.averageCheck >= :minCheck', { minCheck: 100 }],
+          ['v.averageCheck <= :maxCheck', { maxCheck: 500 }],
+        ]),
+      );
+    });
+
+    it('нульові межі теж діють (0 — це значення, а не «не задано»)', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ page: 1, limit: 20, minRating: 0, minCheck: 0 });
+      expect(wheres(mockQb)).toEqual(
+        expect.arrayContaining([
+          ['v.ratingAvg >= :minRating', { minRating: 0 }],
+          ['v.averageCheck >= :minCheck', { minCheck: 0 }],
+        ]),
+      );
+    });
+
+    it('type — фільтр за слагом типу', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ page: 1, limit: 20, type: 'bar' });
+      expect(wheres(mockQb)).toContainEqual([
+        'ty.slug = :type',
+        { type: 'bar' },
+      ]);
+    });
+
+    it('lat+lng+radiusKm → ST_DWithin з радіусом у метрах', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({
+        page: 1,
+        limit: 20,
+        lat: 50.45,
+        lng: 30.52,
+        radiusKm: 5,
+      });
+      const geo = wheres(mockQb).find((c: unknown[]) =>
+        String(c[0]).includes('ST_DWithin'),
+      );
+      expect(geo).toBeDefined();
+      expect(geo[0]).toContain('ST_MakePoint(:lng, :lat)::geography');
+      expect(geo[1]).toEqual({ lng: 30.52, lat: 50.45, meters: 5000 });
+    });
+
+    it.each([
+      ['без radiusKm', { lat: 50.45, lng: 30.52 }],
+      ['без lng', { lat: 50.45, radiusKm: 5 }],
+      ['без lat', { lng: 30.52, radiusKm: 5 }],
+    ])('гео-фільтр не додається %s', async (_name, geo) => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ page: 1, limit: 20, ...geo });
+      expect(
+        wheres(mockQb).some((c: unknown[]) =>
+          String(c[0]).includes('ST_DWithin'),
+        ),
+      ).toBe(false);
+    });
+
+    it('без жодного фільтра andWhere не викликається', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ page: 1, limit: 20 });
+      expect(mockQb.andWhere).not.toHaveBeenCalled();
+    });
+
+    it('кілька фільтрів накладаються разом (AND), q іде першим у порядку умов', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({
+        page: 1,
+        limit: 20,
+        q: 'бар',
+        minRating: 3,
+        feature: 'wifi',
+        type: 'bar',
+        recommended: '1',
+      });
+      const order = wheres(mockQb).map((c: unknown[]) =>
+        typeof c[0] === 'string' ? c[0] : 'brackets',
+      );
+      expect(order[0]).toBe('brackets');
+      expect(order[1]).toBe('v.ratingAvg >= :minRating');
+      expect(order[2]).toContain('EXISTS');
+      expect(order[3]).toBe('ty.slug = :type');
+      expect(order[4]).toBe('v.recommendedBy IS NOT NULL');
+    });
+  });
+
+  describe('сортування', () => {
+    const q = { page: 1, limit: 20 };
+
+    it('rating: за ratingAvg DESC NULLS LAST, потім ratingCount DESC', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ ...q, sort: 'rating' });
+      expect(mockQb.orderBy).toHaveBeenCalledWith(
+        'v.ratingAvg',
+        'DESC',
+        'NULLS LAST',
+      );
+      expect(mockQb.addOrderBy).toHaveBeenCalledWith('v.ratingCount', 'DESC');
+    });
+
+    it('check: за середнім чеком ASC NULLS LAST', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ ...q, sort: 'check' });
+      expect(mockQb.orderBy).toHaveBeenCalledWith(
+        'v.averageCheck',
+        'ASC',
+        'NULLS LAST',
+      );
+      expect(mockQb.addOrderBy).not.toHaveBeenCalled();
+    });
+
+    it('name: за назвою ASC', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ ...q, sort: 'name' });
+      expect(mockQb.orderBy).toHaveBeenCalledWith('v.name', 'ASC');
+    });
+
+    it.each([
+      ['newest', 'newest' as const],
+      ['без sort (дефолт)', undefined],
+    ])('%s: за createdAt DESC', async (_name, sort) => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ ...q, sort });
+      expect(mockQb.orderBy).toHaveBeenCalledTimes(1);
+      expect(mockQb.orderBy).toHaveBeenCalledWith('v.createdAt', 'DESC');
+    });
+
+    it('distance з координатами: параметри реєструються, відстань у select, order за distance', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ ...q, sort: 'distance', lat: 50.45, lng: 30.52 });
+      // setParameters — без radiusKm ST_MakePoint(:lng, :lat) інакше лишився б сирим
+      expect(mockQb.setParameters).toHaveBeenCalledWith({
+        lng: 30.52,
+        lat: 50.45,
+      });
+      expect(mockQb.addSelect).toHaveBeenCalledWith(
+        'ST_Distance(v.location, ST_MakePoint(:lng, :lat)::geography)',
+        'distance',
+      );
+      expect(mockQb.orderBy).toHaveBeenCalledWith('distance', 'ASC');
+    });
+
+    it('distance без координат: відкат на createdAt DESC, без ST_Distance', async () => {
+      const mockQb = venues.createQueryBuilder();
+      await service.search({ ...q, sort: 'distance' });
+      expect(mockQb.orderBy).toHaveBeenCalledWith('v.createdAt', 'DESC');
+      expect(mockQb.addSelect).not.toHaveBeenCalled();
+      expect(mockQb.setParameters).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('кешування', () => {
+    const keyOf = (query: object) =>
+      `venues:list:${createHash('sha1').update(JSON.stringify(query)).digest('hex')}`;
+
+    it('міс: читає і пише той самий ключ (sha1 запиту), TTL 60с, кладе сторінку і total', async () => {
+      const query = { page: 2, limit: 15, q: 'бар' };
+      const mockQb = venues.createQueryBuilder();
+      mockQb.getManyAndCount.mockResolvedValue([[{ id: 'v1' }], 16]);
+      const res = await service.search(query);
+      expect(cache.get).toHaveBeenCalledWith(keyOf(query));
+      expect(cache.set).toHaveBeenCalledWith(
+        keyOf(query),
+        { data: [{ id: 'v1' }], total: 16 },
+        60,
+      );
+      expect(res.meta).toEqual({
+        page: 2,
+        limit: 15,
+        total: 16,
+        hasMore: false,
+      });
+    });
+
+    it('хіт: БД не чіпається, кеш не перезаписується, meta будується з page/limit запиту', async () => {
+      cache.get.mockResolvedValueOnce({ data: [{ id: 'v1' }], total: 40 });
+      const res = await service.search({ page: 1, limit: 20 });
+      expect(venues.createQueryBuilder).not.toHaveBeenCalled();
+      expect(cache.set).not.toHaveBeenCalled();
+      expect(res).toEqual({
+        data: [{ id: 'v1' }],
+        meta: { page: 1, limit: 20, total: 40, hasMore: true },
+      });
+    });
+
+    it('різні запити → різні ключі кешу', async () => {
+      await service.search({ page: 1, limit: 20 });
+      await service.search({ page: 2, limit: 20 });
+      const [a, b] = cache.get.mock.calls.map((c: unknown[]) => c[0]);
+      expect(a).not.toBe(b);
     });
   });
 

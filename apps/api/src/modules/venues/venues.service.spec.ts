@@ -163,9 +163,21 @@ describe('VenuesService', () => {
 
       // id повернутий тим самим save транзакції → id приходить із ланцюга tx
       const venueId = 'v-new';
-      expect(wf).toHaveBeenCalledWith(venueId, [{ id: 'f1', code: 'wifi' }], txEm);
-      expect(wt).toHaveBeenCalledWith(venueId, [{ id: 't1', slug: 'beer' }], txEm);
-      expect(wty).toHaveBeenCalledWith(venueId, { id: 'ty1', slug: 'bar' }, txEm);
+      expect(wf).toHaveBeenCalledWith(
+        venueId,
+        [{ id: 'f1', code: 'wifi' }],
+        txEm,
+      );
+      expect(wt).toHaveBeenCalledWith(
+        venueId,
+        [{ id: 't1', slug: 'beer' }],
+        txEm,
+      );
+      expect(wty).toHaveBeenCalledWith(
+        venueId,
+        { id: 'ty1', slug: 'bar' },
+        txEm,
+      );
       // Сам заклад теж записаний у той самий em транзакції, а не повз неї.
       expect(txEm.save).toHaveBeenCalledWith(
         expect.objectContaining({ ownerId: 'u1', name: 'X' }),
@@ -224,6 +236,156 @@ describe('VenuesService', () => {
     expect(em.save).toHaveBeenCalled();
   });
 
+  describe('update — транзакція і подія', () => {
+    const existing = () => ({
+      id: 'v1',
+      ownerId: 'u1',
+      status: VenueStatus.Approved,
+      name: 'Стара назва',
+    });
+
+    it('пише фічі/теги/тип і сам заклад в em транзакції — не поза нею', async () => {
+      // Окремий txEm: якщо write-виклик поїде поза manager.transaction,
+      // він отримає інший менеджер і тест впаде.
+      const txEm = { save: jest.fn(async (e: any) => e), delete: jest.fn() };
+      venues.manager.transaction.mockImplementation(async (cb: any) =>
+        cb(txEm),
+      );
+      venues.findOne.mockResolvedValueOnce(existing());
+      featuresRepo.find.mockResolvedValue([{ id: 'f1', code: 'wifi' }]);
+      tagsRepo.find.mockResolvedValue([{ id: 't1', slug: 'beer' }]);
+      venueTypesRepo.findOne.mockResolvedValue({ id: 'ty1', slug: 'bar' });
+      const wf = jest
+        .spyOn(VenueTaxonomyService.prototype, 'writeFeatures')
+        .mockResolvedValue(undefined);
+      const wt = jest
+        .spyOn(VenueTaxonomyService.prototype, 'writeTags')
+        .mockResolvedValue(undefined);
+      const wty = jest
+        .spyOn(VenueTaxonomyService.prototype, 'writeType')
+        .mockResolvedValue(undefined);
+      try {
+        await service.update('u1', 'v1', {
+          name: 'Нова',
+          featureCodes: ['wifi'],
+          tagSlugs: ['beer'],
+          typeSlug: 'bar',
+        });
+        expect(wf).toHaveBeenCalledWith(
+          'v1',
+          [{ id: 'f1', code: 'wifi' }],
+          txEm,
+        );
+        expect(wt).toHaveBeenCalledWith(
+          'v1',
+          [{ id: 't1', slug: 'beer' }],
+          txEm,
+        );
+        expect(wty).toHaveBeenCalledWith(
+          'v1',
+          { id: 'ty1', slug: 'bar' },
+          txEm,
+        );
+        expect(txEm.save).toHaveBeenCalledWith(
+          expect.objectContaining({ id: 'v1', name: 'Нова' }),
+        );
+        expect(em.save).not.toHaveBeenCalled();
+      } finally {
+        [wf, wt, wty].forEach((sp) => sp.mockRestore());
+      }
+    });
+
+    it('запис заклад-після-прив’язок: порядок features → tags → type → save', async () => {
+      const calls: string[] = [];
+      const txEm = {
+        save: jest.fn(async (e: any) => {
+          calls.push('save');
+          return e;
+        }),
+        delete: jest.fn(),
+      };
+      venues.manager.transaction.mockImplementation(async (cb: any) =>
+        cb(txEm),
+      );
+      venues.findOne.mockResolvedValueOnce(existing());
+      const spies = (['writeFeatures', 'writeTags', 'writeType'] as const).map(
+        (m) =>
+          jest
+            .spyOn(VenueTaxonomyService.prototype, m)
+            .mockImplementation(async () => {
+              calls.push(m);
+            }),
+      );
+      try {
+        await service.update('u1', 'v1', {
+          featureCodes: [],
+          tagSlugs: [],
+          typeSlug: null,
+        } as any);
+        expect(calls).toEqual([
+          'writeFeatures',
+          'writeTags',
+          'writeType',
+          'save',
+        ]);
+      } finally {
+        spies.forEach((sp) => sp.mockRestore());
+      }
+    });
+
+    it('подія venue.updated йде ПІСЛЯ коміту і несе venueId', async () => {
+      const order: string[] = [];
+      venues.manager.transaction.mockImplementation(async (cb: any) => {
+        const r = await cb(em);
+        order.push('commit');
+        return r;
+      });
+      events.emit.mockImplementation(() => order.push('emit'));
+      venues.findOne.mockResolvedValueOnce(existing());
+      await service.update('u1', 'v1', { name: 'Нова' });
+      expect(events.emit).toHaveBeenCalledWith('venue.updated', {
+        venueId: 'v1',
+      });
+      expect(order).toEqual(['commit', 'emit']);
+    });
+
+    it('відмова в доступі: ні транзакції, ні події, ні запису', async () => {
+      venues.findOne.mockResolvedValueOnce({ ...existing(), ownerId: 'u2' });
+      perms.hasPermission.mockResolvedValueOnce(false);
+      await expect(service.update('u1', 'v1', { name: 'X' })).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(venues.manager.transaction).not.toHaveBeenCalled();
+      expect(events.emit).not.toHaveBeenCalled();
+    });
+
+    it('невідомий код фічі → 400 до транзакції і без події', async () => {
+      venues.findOne.mockResolvedValueOnce(existing());
+      await expect(
+        service.update('u1', 'v1', { featureCodes: ['bogus'] }),
+      ).rejects.toThrow(BadRequestException);
+      expect(venues.manager.transaction).not.toHaveBeenCalled();
+      expect(events.emit).not.toHaveBeenCalled();
+    });
+
+    it('падіння всередині транзакції: подія не публікується', async () => {
+      venues.manager.transaction.mockRejectedValueOnce(new Error('db down'));
+      venues.findOne.mockResolvedValueOnce(existing());
+      await expect(
+        service.update('u1', 'v1', { name: 'Нова' }),
+      ).rejects.toThrow('db down');
+      expect(events.emit).not.toHaveBeenCalled();
+    });
+
+    it('неіснуючий заклад → 404, без перевірки прав і запису', async () => {
+      venues.findOne.mockResolvedValueOnce(null);
+      await expect(service.update('u1', 'nope', { name: 'X' })).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(venues.manager.transaction).not.toHaveBeenCalled();
+    });
+  });
+
   describe('update/create — очист й заміна опційних полів', () => {
     const venueDraft = (): any => ({
       id: 'v1',
@@ -277,6 +439,46 @@ describe('VenuesService', () => {
         workingHours: { monday: '09:00-18:00', tuesday: '' },
       } as any);
       expect(venue2.workingHours).toEqual({ monday: '09:00-18:00' });
+    });
+
+    it('name/address: null чи відсутнє значення не очищає, нове — перезаписує', async () => {
+      const venue = draft();
+      await service.update('u1', 'v1', {
+        name: null,
+        address: undefined,
+      } as any);
+      expect(venue.name).toBe('Стара назва');
+      expect(venue.address).toBe(venueDraft().address);
+
+      const venue2 = draft();
+      await service.update('u1', 'v1', { name: 'Нова', address: 'вул. Нова' });
+      expect(venue2.name).toBe('Нова');
+      expect(venue2.address).toBe('вул. Нова');
+    });
+
+    it('latitude/longitude/averageCheck/description: нове значення записується', async () => {
+      const venue = draft();
+      await service.update('u1', 'v1', {
+        latitude: 49.84,
+        longitude: 24.03,
+        averageCheck: 400,
+        description: '  Новий опис  ',
+      } as any);
+      expect(venue.latitude).toBe(49.84);
+      expect(venue.longitude).toBe(24.03);
+      expect(venue.averageCheck).toBe(400);
+      expect(venue.description).toBe('Новий опис');
+    });
+
+    it('без ключів таксономій прив’язки не чіпаються (ні delete, ні save, ні resolve)', async () => {
+      draft();
+      await service.update('u1', 'v1', { name: 'Інша' });
+      expect(em.delete).not.toHaveBeenCalled();
+      expect(featuresRepo.find).not.toHaveBeenCalled();
+      expect(tagsRepo.find).not.toHaveBeenCalled();
+      expect(venueTypesRepo.findOne).not.toHaveBeenCalled();
+      // сам заклад збережений тією ж транзакцією
+      expect(em.save).toHaveBeenCalledTimes(1);
     });
 
     it('featureCodes: заміна набору — delete старих привʼязок + save нових', async () => {
