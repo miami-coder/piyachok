@@ -127,6 +127,8 @@ test.describe.serial('Адмінпанель', () => {
     const page = await adminPage(browser)
     const MARKER = 'E2E марка контенту'
     await page.goto('/admin/content')
+    // fill до гідрації React склеює новий текст зі старим — чекаємо, поки клієнт оживе
+    await page.waitForLoadState('networkidle')
     const about = page.locator('#about')
     await about.fill(`${ABOUT_SEED} ${MARKER}`)
     await page.getByRole('button', { name: 'Зберегти «Про нас»' }).click()
@@ -137,6 +139,7 @@ test.describe.serial('Адмінпанель', () => {
 
     // відновлення сідного тексту
     await page.goto('/admin/content')
+    await page.waitForLoadState('networkidle')
     await page.locator('#about').fill(ABOUT_SEED)
     await page.getByRole('button', { name: 'Зберегти «Про нас»' }).click()
     await expect(page.getByText('Текст оновлено').first()).toBeVisible()
